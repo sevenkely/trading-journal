@@ -309,8 +309,8 @@ export default function TradesPage() {
       />
 
       <Card className="mb-5 space-y-4 p-4">
-        <div className="grid gap-3 md:grid-cols-12">
-          <div className="md:col-span-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-12">
+          <div className="col-span-2 md:col-span-3">
             <Select value={query.account} onChange={(e) => setQuery({ account: e.target.value })} aria-label="Compte">
               <option value="all">Tous les comptes</option>
               {accountList.map((a) => (
@@ -320,7 +320,7 @@ export default function TradesPage() {
               ))}
             </Select>
           </div>
-          <div className="relative md:col-span-5">
+          <div className="relative col-span-2 md:col-span-5">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
             <Input
               className="pl-10"
@@ -330,10 +330,10 @@ export default function TradesPage() {
               onChange={(e) => setQuery({ q: e.target.value })}
             />
           </div>
-          <div className="md:col-span-2">
+          <div className="col-span-1 md:col-span-2">
             <Input type="date" lang="fr-FR" aria-label="Du" value={query.from} onChange={(e) => setQuery({ from: e.target.value })} />
           </div>
-          <div className="md:col-span-2">
+          <div className="col-span-1 md:col-span-2">
             <Input type="date" lang="fr-FR" aria-label="Au" value={query.to} onChange={(e) => setQuery({ to: e.target.value })} />
           </div>
         </div>

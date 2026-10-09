@@ -1,6 +1,6 @@
 import { usePalette } from '../PaletteContext';
 import { ChartFrame, EmptyChart } from './ChartFrame';
-import { LOSS_HATCH, NEUTRAL_COLOR } from './shared';
+import { LOSS_HATCH, chartPalette } from './shared';
 import type { OutcomeSplit } from '../../lib/chartData';
 
 /** Répartition gagnants / perdants / break-even en barre empilée, avec effectifs et parts. */
@@ -18,7 +18,7 @@ export function OutcomeBar({ split }: { split: OutcomeSplit }) {
   const segments = [
     { key: 'win', label: 'Gagnants', count: split.wins, color: `rgb(${gainRgb} / 0.85)`, hatch: false },
     { key: 'loss', label: 'Perdants', count: split.losses, color: `rgb(${lossRgb} / 0.85)`, hatch: true },
-    { key: 'be', label: 'Break-even', count: split.breakeven, color: `${NEUTRAL_COLOR}cc`, hatch: false },
+    { key: 'be', label: 'Break-even', count: split.breakeven, color: `${chartPalette().neutral}cc`, hatch: false },
   ];
   const share = (n: number) => (n / split.total) * 100;
   const summary = segments.map((s) => `${s.label} ${s.count} (${Math.round(share(s.count))} %)`).join(', ');

@@ -3,7 +3,7 @@ import { rDistribution } from '../../lib/chartData';
 import { formatR } from '../../lib/format';
 import { usePalette } from '../PaletteContext';
 import { ChartFrame, ChartTable, EmptyChart } from './ChartFrame';
-import { LOSS_HATCH, NEUTRAL_COLOR } from './shared';
+import { LOSS_HATCH, chartPalette } from './shared';
 
 /** Histogramme des R réalisés par intervalles de 0,5 R, avec moyenne et médiane. */
 export function RHistogram({ values }: { values: number[] }) {
@@ -38,7 +38,7 @@ export function RHistogram({ values }: { values: number[] }) {
                     className="w-full rounded-t-sm"
                     style={{
                       height: `${(bin.count / peak) * 100}%`,
-                      backgroundColor: color ? `rgb(${color} / 0.8)` : `${NEUTRAL_COLOR}99`,
+                      backgroundColor: color ? `rgb(${color} / 0.8)` : `${chartPalette().neutral}99`,
                       backgroundImage: isLoss ? LOSS_HATCH : undefined,
                     }}
                     title={`${formatR(bin.from)} à ${formatR(bin.to)} : ${bin.count} trade(s)`}

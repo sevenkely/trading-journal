@@ -6,7 +6,7 @@ import { formatMoney, formatNumber } from '../../lib/format';
 import { usePalette } from '../PaletteContext';
 import { Segmented } from '../ui';
 import { ChartFrame, ChartTable, EmptyChart, TooltipCard, TooltipRow } from './ChartFrame';
-import { AXIS_TICK, CURSOR_STROKE, GRID_STROKE } from './shared';
+import { axisTick, chartPalette } from './shared';
 
 interface DailyPnlChartProps {
   bars: DayBar[];
@@ -57,11 +57,11 @@ export function DailyPnlChart({ bars: allBars, currency, title = 'P&L par jour',
       <div role="img" aria-label={`P&L par jour : ${bars.length} jours, moyenne ${formatMoney(average ?? 0, currency, true)} par jour`} className="h-56 md:h-64">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={bars} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke={GRID_STROKE} strokeDasharray="2 6" vertical={false} />
-            <XAxis dataKey="label" tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={24} />
-            <YAxis width={72} tick={AXIS_TICK} tickLine={false} axisLine={false} tickFormatter={(v: number) => formatNumber(v, 0)} />
-            <ReferenceLine y={0} stroke={CURSOR_STROKE} />
-            <Tooltip cursor={{ fill: 'rgb(255 255 255 / 0.03)' }} content={<DayTooltip currency={currency} />} />
+            <CartesianGrid stroke={chartPalette().grid} strokeDasharray="2 6" vertical={false} />
+            <XAxis dataKey="label" tick={axisTick()} tickLine={false} axisLine={false} minTickGap={24} />
+            <YAxis width={72} tick={axisTick()} tickLine={false} axisLine={false} tickFormatter={(v: number) => formatNumber(v, 0)} />
+            <ReferenceLine y={0} stroke={chartPalette().cursor} />
+            <Tooltip cursor={{ fill: chartPalette().cursorFill }} content={<DayTooltip currency={currency} />} />
             <Bar dataKey="pnl" radius={[3, 3, 3, 3]} isAnimationActive={!reduce} animationDuration={700}>
               {bars.map((b) => (
                 <Cell key={b.date} fill={b.pnl >= 0 ? `rgb(${gainRgb} / 0.85)` : `rgb(${lossRgb} / 0.85)`} />
@@ -70,9 +70,9 @@ export function DailyPnlChart({ bars: allBars, currency, title = 'P&L par jour',
             {average !== null && (
               <ReferenceLine
                 y={average}
-                stroke="#e6ebf3"
+                stroke={chartPalette().text}
                 strokeDasharray="4 4"
-                label={{ value: `Moyenne ${formatMoney(average, currency, true)}`, position: 'insideTopRight', fill: '#e6ebf3', fontSize: 11, stroke: '#0d1118', strokeWidth: 3, paintOrder: 'stroke' }}
+                label={{ value: `Moyenne ${formatMoney(average, currency, true)}`, position: 'insideTopRight', fill: chartPalette().text, fontSize: 11, stroke: chartPalette().marker, strokeWidth: 3, paintOrder: 'stroke' }}
               />
             )}
           </ComposedChart>

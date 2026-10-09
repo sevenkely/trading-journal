@@ -6,7 +6,7 @@ import { formatDate, formatDateTime, formatMoney, formatNumber, formatPercent } 
 import type { Trade } from '../../lib/types';
 import { PnlAmount, Segmented, cn } from '../ui';
 import { ChartFrame, ChartTable, EmptyChart, TooltipCard, TooltipRow } from './ChartFrame';
-import { AXIS_TICK, CURSOR_STROKE, EQUITY_COLOR, GRID_STROKE, LIMIT_COLOR, NEUTRAL_COLOR, TARGET_COLOR } from './shared';
+import { axisTick, chartPalette } from './shared';
 
 export interface EquityPanelProps {
   trades: Trade[];
@@ -107,36 +107,36 @@ export function EquityPanel({ trades, startingBalance, currency, rule }: EquityP
           <ComposedChart data={visible} margin={{ top: 16, right: 16, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={EQUITY_COLOR} stopOpacity={0.28} />
-                <stop offset="100%" stopColor={EQUITY_COLOR} stopOpacity={0} />
+                <stop offset="0%" stopColor={chartPalette().equity} stopOpacity={0.28} />
+                <stop offset="100%" stopColor={chartPalette().equity} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke={GRID_STROKE} strokeDasharray="2 6" vertical={false} />
-            <XAxis dataKey="n" tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={32} tickFormatter={tickLabel} />
-            <YAxis width={72} tick={AXIS_TICK} tickLine={false} axisLine={false} domain={['auto', 'auto']} tickFormatter={(v: number) => formatNumber(v, 0)} />
-            <Tooltip cursor={{ stroke: CURSOR_STROKE, strokeDasharray: '3 3' }} content={<EquityTooltip currency={currency} />} />
-            <ReferenceLine y={startingBalance} stroke={NEUTRAL_COLOR} strokeDasharray="1 4" />
+            <CartesianGrid stroke={chartPalette().grid} strokeDasharray="2 6" vertical={false} />
+            <XAxis dataKey="n" tick={axisTick()} tickLine={false} axisLine={false} minTickGap={32} tickFormatter={tickLabel} />
+            <YAxis width={72} tick={axisTick()} tickLine={false} axisLine={false} domain={['auto', 'auto']} tickFormatter={(v: number) => formatNumber(v, 0)} />
+            <Tooltip cursor={{ stroke: chartPalette().cursor, strokeDasharray: '3 3' }} content={<EquityTooltip currency={currency} />} />
+            <ReferenceLine y={startingBalance} stroke={chartPalette().neutral} strokeDasharray="1 4" />
             {target !== null && (
               <ReferenceLine
                 y={target}
-                stroke={TARGET_COLOR}
+                stroke={chartPalette().target}
                 strokeDasharray="6 4"
-                label={{ value: `Objectif ${formatNumber(target, 0)}`, position: 'insideTopLeft', fill: TARGET_COLOR, fontSize: 11 }}
+                label={{ value: `Objectif ${formatNumber(target, 0)}`, position: 'insideTopLeft', fill: chartPalette().target, fontSize: 11 }}
               />
             )}
             <Area
               type="monotone"
               dataKey="equity"
-              stroke={EQUITY_COLOR}
+              stroke={chartPalette().equity}
               strokeWidth={2.25}
               fill={`url(#${gradientId})`}
               dot={false}
-              activeDot={{ r: 5, fill: EQUITY_COLOR, stroke: '#0d1118', strokeWidth: 3 }}
+              activeDot={{ r: 5, fill: chartPalette().equity, stroke: chartPalette().marker, strokeWidth: 3 }}
               isAnimationActive={!reduce}
               animationDuration={900}
             />
             {hasLimit && (
-              <Line type="monotone" dataKey="limit" stroke={LIMIT_COLOR} strokeWidth={1.5} strokeDasharray="5 4" dot={false} activeDot={false} connectNulls isAnimationActive={false} />
+              <Line type="monotone" dataKey="limit" stroke={chartPalette().limit} strokeWidth={1.5} strokeDasharray="5 4" dot={false} activeDot={false} connectNulls isAnimationActive={false} />
             )}
             {extremes && (
               <>
@@ -144,27 +144,27 @@ export function EquityPanel({ trades, startingBalance, currency, rule }: EquityP
                   x={focus[extremes.high.index].n}
                   y={extremes.high.equity}
                   r={4}
-                  fill={EQUITY_COLOR}
-                  stroke="#0d1118"
+                  fill={chartPalette().equity}
+                  stroke={chartPalette().marker}
                   strokeWidth={2}
-                  label={{ value: `Max ${formatNumber(extremes.high.equity, 0)}`, position: markerPosition(extremes.high.index, focus.length, 'top'), fill: '#eef2f8', fontSize: 11 }}
+                  label={{ value: `Max ${formatNumber(extremes.high.equity, 0)}`, position: markerPosition(extremes.high.index, focus.length, 'top'), fill: chartPalette().text, fontSize: 11 }}
                 />
                 <ReferenceDot
                   x={focus[extremes.low.index].n}
                   y={extremes.low.equity}
                   r={4}
-                  fill={LIMIT_COLOR}
-                  stroke="#0d1118"
+                  fill={chartPalette().limit}
+                  stroke={chartPalette().marker}
                   strokeWidth={2}
-                  label={{ value: `Min ${formatNumber(extremes.low.equity, 0)}`, position: markerPosition(extremes.low.index, focus.length, 'bottom'), fill: '#eef2f8', fontSize: 11 }}
+                  label={{ value: `Min ${formatNumber(extremes.low.equity, 0)}`, position: markerPosition(extremes.low.index, focus.length, 'bottom'), fill: chartPalette().text, fontSize: 11 }}
                 />
               </>
             )}
             <Brush
               dataKey="n"
               height={26}
-              stroke={CURSOR_STROKE}
-              fill="#0d1118"
+              stroke={chartPalette().cursor}
+              fill={chartPalette().surface}
               travellerWidth={8}
               startIndex={start}
               endIndex={end}
@@ -178,15 +178,15 @@ export function EquityPanel({ trades, startingBalance, currency, rule }: EquityP
       <div className="mt-2 h-28" aria-hidden>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={focus} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke={GRID_STROKE} strokeDasharray="2 6" vertical={false} />
+            <CartesianGrid stroke={chartPalette().grid} strokeDasharray="2 6" vertical={false} />
             <XAxis dataKey="n" hide />
-            <YAxis width={72} tick={AXIS_TICK} tickLine={false} axisLine={false} domain={['dataMin', 0]} tickFormatter={(v: number) => `${formatNumber(v, 1)} %`} />
+            <YAxis width={72} tick={axisTick()} tickLine={false} axisLine={false} domain={['dataMin', 0]} tickFormatter={(v: number) => `${formatNumber(v, 1)} %`} />
             <Area
               type="monotone"
               dataKey="drawdownPct"
-              stroke={LIMIT_COLOR}
+              stroke={chartPalette().limit}
               strokeWidth={1.5}
-              fill="rgb(255 107 122 / 0.22)"
+              fill={chartPalette().limitFill}
               isAnimationActive={!reduce}
               animationDuration={900}
             />
@@ -198,13 +198,13 @@ export function EquityPanel({ trades, startingBalance, currency, rule }: EquityP
       <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted">
         {target !== null && (
           <li className="flex items-center gap-2">
-            <span className="w-5 border-t-2 border-dashed" style={{ borderColor: TARGET_COLOR }} aria-hidden />
+            <span className="w-5 border-t-2 border-dashed" style={{ borderColor: chartPalette().target }} aria-hidden />
             Objectif {formatMoney(target, currency)}
           </li>
         )}
         {hasLimit && (
           <li className="flex items-center gap-2">
-            <span className="w-5 border-t-2 border-dashed" style={{ borderColor: LIMIT_COLOR }} aria-hidden />
+            <span className="w-5 border-t-2 border-dashed" style={{ borderColor: chartPalette().limit }} aria-hidden />
             Seuil de drawdown {limitNow !== null ? formatMoney(limitNow, currency) : ''}
           </li>
         )}

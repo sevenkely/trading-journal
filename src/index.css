@@ -123,23 +123,32 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
   background-attachment: fixed;
 }
 
-/* Squelette de chargement */
-@keyframes shimmer {
+/* Squelette de chargement : balayage par transform (jamais de background-position) */
+@keyframes sweep {
   from {
-    background-position: 150% 0, 0 0;
+    transform: translateX(-100%);
   }
   to {
-    background-position: -150% 0, 0 0;
+    transform: translateX(100%);
   }
 }
 
 .skeleton {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   border-radius: 1rem;
-  background:
-    linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.05) 45%, transparent 70%),
-    var(--color-surface-2);
-  background-size: 250% 100%, auto;
-  animation: shimmer 1.7s linear infinite;
+  background: var(--color-surface-2);
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.05) 45%, transparent 70%);
+  transform: translateX(-100%);
+  animation: sweep 1.7s linear infinite;
 }
 
 /* Tiroir de détail d’un trade : glisse depuis la droite sur ordinateur, depuis le bas sur mobile */
