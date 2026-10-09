@@ -298,7 +298,7 @@ html[data-density='compact'] tbody td {
 }
 
 .stagger > * {
-  animation: rise 0.5s var(--ease-out-expo) both;
+  animation: rise 0.4s var(--ease-out-expo) both;
 }
 
 .stagger > :nth-child(2) { animation-delay: 60ms; }

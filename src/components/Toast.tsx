@@ -5,14 +5,21 @@ import { cn } from './ui';
 
 type ToastKind = 'success' | 'error' | 'info';
 
+/** Action proposée dans la notification (ex. « Annuler » après une suppression). */
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface ToastItem {
   id: number;
   kind: ToastKind;
   message: string;
+  action?: ToastAction;
 }
 
 interface ToastApi {
-  show: (message: string, kind?: ToastKind) => void;
+  show: (message: string, kind?: ToastKind, action?: ToastAction) => void;
 }
 
 const ToastContext = createContext<ToastApi | null>(null);
@@ -32,10 +39,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const show = useCallback(
-    (message: string, kind: ToastKind = 'success') => {
+    (message: string, kind: ToastKind = 'success', action?: ToastAction) => {
       const id = nextId.current++;
-      setItems((prev) => [...prev, { id, kind, message }]);
-      window.setTimeout(() => dismiss(id), kind === 'error' ? 7000 : 4000);
+      setItems((prev) => [...prev, { id, kind, message, action }]);
+      // Avec une action (Annuler), la notification reste le temps du délai d’annulation (6 s)
+      window.setTimeout(() => dismiss(id), action ? 6000 : kind === 'error' ? 7000 : 4000);
     },
     [dismiss],
   );
@@ -63,6 +71,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             >
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-surface-3">{ICONS[t.kind]}</span>
               <span className="flex-1 break-words pt-0.5 leading-relaxed text-fg-2">{t.message}</span>
+              {t.action && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    t.action?.onClick();
+                    dismiss(t.id);
+                  }}
+                  className="shrink-0 rounded-lg px-2.5 py-1 text-sm font-semibold text-accent-hi transition-colors hover:bg-surface-3"
+                >
+                  {t.action.label}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => dismiss(t.id)}

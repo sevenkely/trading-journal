@@ -1,3 +1,4 @@
+import { useConfirm } from '../components/ConfirmDialog';
 import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { CheckCircle2, Pencil, Plus, Trash2, Wallet } from 'lucide-react';
@@ -81,6 +82,7 @@ export default function AccountsPage() {
   const repo = useRepo();
   const refresh = useRefresh();
   const toast = useToast();
+  const confirm = useConfirm();
   const { data: accounts, isLoading: loadingAccounts } = useAccounts();
   const { data: trades, isLoading: loadingTrades } = useTrades();
 
@@ -124,7 +126,7 @@ export default function AccountsPage() {
           }
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="stagger grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {accountList.map((account) => {
             const own = tradeList.filter((t) => t.account_id === account.id);
             const report = evaluateAccount(account, own);
@@ -189,10 +191,14 @@ export default function AccountsPage() {
                     variant="ghost"
                     className="text-loss hover:text-loss"
                     loading={remove.isPending && remove.variables === account.id}
-                    onClick={() => {
-                      if (window.confirm(`Supprimer le compte « ${account.name} » et tous ses trades ? Action irréversible.`)) {
-                        remove.mutate(account.id);
-                      }
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: 'Supprimer ce compte ?',
+                        description: `« ${account.name} » et tous ses trades seront supprimés. Action irréversible.`,
+                        confirmLabel: 'Supprimer le compte',
+                        danger: true,
+                      });
+                      if (ok) remove.mutate(account.id);
                     }}
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />

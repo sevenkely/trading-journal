@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { useAccounts, useProfile, useRefresh, useRepo, useTrades } from '../data/hooks';
+import { useUndoableTradeDelete } from '../data/undoableDelete';
 import { EMOTIONS, MISTAKES, SESSIONS, TIMEFRAMES } from '../lib/constants';
 import { formatMoney, formatR, fromDateTimeLocal, toDateTimeLocal } from '../lib/format';
 import { sessionForDate } from '../lib/metrics';
@@ -297,15 +298,7 @@ function TradeForm({
     onError: (e) => toast.show(errorMessage(e), 'error'),
   });
 
-  const remove = useMutation({
-    mutationFn: () => repo.deleteTrades(trade ? [trade.id] : []),
-    onSuccess: async () => {
-      await refresh();
-      toast.show('Trade supprimé');
-      navigate('/trades');
-    },
-    onError: (e) => toast.show(errorMessage(e), 'error'),
-  });
+  const removeTrade = useUndoableTradeDelete();
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -587,9 +580,9 @@ function TradeForm({
             <Button
               variant="ghost"
               className="text-loss hover:text-loss"
-              loading={remove.isPending}
               onClick={() => {
-                if (window.confirm('Supprimer ce trade ? Action irréversible.')) remove.mutate();
+                if (trade) removeTrade([trade.id], 'Trade supprimé');
+                navigate('/trades');
               }}
             >
               <Trash2 className="h-4 w-4" aria-hidden />

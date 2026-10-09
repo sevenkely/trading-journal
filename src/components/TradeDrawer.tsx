@@ -1,12 +1,12 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
 import { Check, ChevronLeft, ChevronRight, Pencil, Trash2, X } from 'lucide-react';
-import { useProfile, useRefresh, useRepo } from '../data/hooks';
+import { useProfile, useRepo } from '../data/hooks';
+import { useUndoableTradeDelete } from '../data/undoableDelete';
+import { trapFocus } from './focusTrap';
 import { formatDateTime, formatDuration, formatMoney, formatNumber, formatR } from '../lib/format';
 import type { Account, Trade } from '../lib/types';
-import { errorMessage, useToast } from './Toast';
 import { ShotThumb } from './Screenshots';
 import { Badge, Button, PnlAmount, buttonStyles } from './ui';
 
@@ -23,25 +23,6 @@ export function plannedRiskReward(trade: Pick<Trade, 'entry_price' | 'stop_loss'
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
-
-/** Garde le focus dans le panneau : Tab et Maj+Tab bouclent sur les éléments interactifs. */
-function trapFocus(event: KeyboardEvent, panel: HTMLElement) {
-  const items = [...panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')];
-  if (items.length === 0) return;
-  const first = items[0];
-  const last = items[items.length - 1];
-  const active = document.activeElement;
-  if (!panel.contains(active)) {
-    event.preventDefault();
-    first.focus();
-  } else if (event.shiftKey && active === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && active === last) {
-    event.preventDefault();
-    first.focus();
-  }
-}
 
 interface TradeDrawerProps {
   trade: Trade;
@@ -60,8 +41,6 @@ interface TradeDrawerProps {
  */
 export function TradeDrawer({ trade, account, position, onPrev, onNext, onClose, onDeleted }: TradeDrawerProps) {
   const repo = useRepo();
-  const refresh = useRefresh();
-  const toast = useToast();
   const { data: profile } = useProfile();
   const titleId = useId();
   const panelRef = useRef<HTMLElement>(null);
@@ -82,15 +61,7 @@ export function TradeDrawer({ trade, account, position, onPrev, onNext, onClose,
       : formatDateTime(trade.closed_at);
   const showShots = repo.supportsScreenshots || trade.screenshots.length > 0;
 
-  const remove = useMutation({
-    mutationFn: () => repo.deleteTrades([trade.id]),
-    onSuccess: async () => {
-      await refresh();
-      toast.show('Trade supprimé');
-      onDeleted();
-    },
-    onError: (error) => toast.show(errorMessage(error), 'error'),
-  });
+  const removeTrade = useUndoableTradeDelete();
 
   // Ouverture : le focus entre dans le panneau et le défilement de la page est figé.
   // Fermeture : le focus revient à l’élément qui a ouvert le détail.
@@ -264,9 +235,9 @@ export function TradeDrawer({ trade, account, position, onPrev, onNext, onClose,
           <Button
             variant="ghost"
             className="text-loss hover:text-loss"
-            loading={remove.isPending}
             onClick={() => {
-              if (window.confirm('Supprimer ce trade ? Action irréversible.')) remove.mutate();
+              removeTrade([trade.id], 'Trade supprimé');
+              onDeleted();
             }}
           >
             <Trash2 className="h-4 w-4" aria-hidden />

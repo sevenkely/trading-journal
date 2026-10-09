@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import Layout from './components/Layout';
+import { ConfirmProvider } from './components/ConfirmDialog';
 import { Loading } from './components/ui';
 import LoginPage from './pages/LoginPage';
 
@@ -18,6 +19,14 @@ const ImportPage = lazy(() => import('./pages/ImportPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 export default function App() {
+  return (
+    <ConfirmProvider>
+      <AppRoutes />
+    </ConfirmProvider>
+  );
+}
+
+function AppRoutes() {
   const { loading, userId } = useAuth();
 
   if (loading) return <Loading label="Connexion…" />;

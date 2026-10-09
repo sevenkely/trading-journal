@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
 import { Check, Download, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
-import { useAccounts, useRefresh, useRepo, useTrades } from '../data/hooks';
+import { useAccounts, useTrades } from '../data/hooks';
 import { computeStats, sortByTradeTime, tradeTime } from '../lib/metrics';
 import { dayKey, formatDateTime, formatPercent, formatProfitFactor, formatR } from '../lib/format';
 import { tradesToCsv } from '../lib/csv';
-import { errorMessage, useToast } from '../components/Toast';
+import { useUndoableTradeDelete } from '../data/undoableDelete';
+import { useHiddenIds } from '../lib/pendingDeletion';
 import { TradeDrawer } from '../components/TradeDrawer';
 import { Badge, Button, Card, EmptyState, Input, Loading, PageHeader, Select, Segmented, Stat, StatStrip, buttonStyles, PnlAmount } from '../components/ui';
 
@@ -22,9 +22,6 @@ const OUTCOMES: { value: Outcome; label: string }[] = [
 ];
 
 export default function TradesPage() {
-  const repo = useRepo();
-  const refresh = useRefresh();
-  const toast = useToast();
   const { data: accounts, isLoading: loadingAccounts } = useAccounts();
   const { data: trades, isLoading: loadingTrades } = useTrades();
   const [accountFilter, setAccountFilter] = useState('all');
@@ -36,16 +33,10 @@ export default function TradesPage() {
   // Trade ouvert dans le détail : dans l’URL (?trade=…), pour revenir au même endroit
   const [params, setParams] = useSearchParams();
   const openId = params.get('trade');
+  // Trades en attente de suppression (délai d’annulation) : masqués tout de suite
+  const hidden = useHiddenIds();
 
-  const remove = useMutation({
-    mutationFn: (ids: string[]) => repo.deleteTrades(ids),
-    onSuccess: async (_data, ids) => {
-      await refresh();
-      setSelected(new Set());
-      toast.show(`${ids.length} trade(s) supprimé(s)`);
-    },
-    onError: (e) => toast.show(errorMessage(e), 'error'),
-  });
+  const removeTrades = useUndoableTradeDelete();
 
   if (loadingAccounts || loadingTrades) return <Loading />;
 
@@ -56,6 +47,7 @@ export default function TradesPage() {
   const rows = sortByTradeTime(trades ?? [])
     .reverse()
     .filter((t) => {
+      if (hidden.has(t.id)) return false;
       if (accountFilter !== 'all' && t.account_id !== accountFilter) return false;
       if (outcome === 'win' && !(t.net_pnl > 0)) return false;
       if (outcome === 'loss' && !(t.net_pnl < 0)) return false;
@@ -135,11 +127,9 @@ export default function TradesPage() {
             {selected.size > 0 && (
               <Button
                 variant="danger"
-                loading={remove.isPending}
                 onClick={() => {
-                  if (window.confirm(`Supprimer ${selected.size} trade(s) ? Action irréversible.`)) {
-                    remove.mutate([...selected]);
-                  }
+                  removeTrades([...selected], `${selected.size} trade(s) supprimé(s)`);
+                  setSelected(new Set());
                 }}
               >
                 <Trash2 className="h-4 w-4" aria-hidden />
@@ -327,7 +317,7 @@ export default function TradesPage() {
           </div>
 
           {/* Liste (mobile) */}
-          <ul className="space-y-2 md:hidden">
+          <ul className="stagger space-y-2 md:hidden">
             {rows.map((t) => {
               const account = accountById.get(t.account_id);
               return (

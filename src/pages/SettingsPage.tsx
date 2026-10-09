@@ -1,3 +1,4 @@
+import { useConfirm } from '../components/ConfirmDialog';
 import { useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Download, Plus, RotateCcw, Trash2, Upload } from 'lucide-react';
@@ -25,6 +26,7 @@ function SettingsForm({ profile }: { profile: Profile }) {
   const repo = useRepo();
   const refresh = useRefresh();
   const toast = useToast();
+  const confirm = useConfirm();
   const { mode, email, signOut } = useAuth();
   const [displayName, setDisplayName] = useState(profile.display_name ?? '');
   const [timezone, setTimezone] = useState(profile.default_timezone);
@@ -118,14 +120,23 @@ function SettingsForm({ profile }: { profile: Profile }) {
     setNewItem('');
   };
 
-  const loadSample = () => {
-    if (window.confirm('Ajouter des données d’exemple (deux comptes, des trades sur deux semaines et des notes) ?')) {
-      sample.mutate();
-    }
+  const loadSample = async () => {
+    const ok = await confirm({
+      title: 'Ajouter des données d’exemple ?',
+      description: 'Deux comptes, des trades sur deux semaines et des notes.',
+      confirmLabel: 'Ajouter',
+    });
+    if (ok) sample.mutate();
   };
 
-  const resetDemo = () => {
-    if (!window.confirm('Effacer toutes les données du mode démo sur ce navigateur ?')) return;
+  const resetDemo = async () => {
+    const ok = await confirm({
+      title: 'Effacer les données du mode démo ?',
+      description: 'Tout ce qui est enregistré sur ce navigateur sera supprimé.',
+      confirmLabel: 'Tout effacer',
+      danger: true,
+    });
+    if (!ok) return;
     Object.keys(localStorage)
       .filter((k) => k.startsWith('tj-demo:'))
       .forEach((k) => localStorage.removeItem(k));

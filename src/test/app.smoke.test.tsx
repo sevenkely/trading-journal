@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import App from '../App';
 import { AuthProvider } from '../auth/AuthContext';
 import { ToastProvider } from '../components/Toast';
@@ -418,24 +418,22 @@ describe('détail d’un trade depuis la page Trades', () => {
     expect(drawer()).toBeNull();
   });
 
-  it('supprime le trade depuis le tiroir après confirmation', async () => {
+  it('supprime le trade depuis le tiroir avec un délai d’annulation', async () => {
     await seed();
     const el = await mountAt('/trades', 'EURUSD');
     await openRow(el, 'EURUSD');
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     await clickButton(drawer() ?? el, 'Supprimer');
 
-    expect(confirm).toHaveBeenCalled();
-    confirm.mockRestore();
-    const started = Date.now();
-    while (drawer() && Date.now() - started < 5_000) {
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      });
-    }
+    // Tout de suite : le tiroir se ferme, la ligne disparaît, une notification propose « Annuler »
     expect(drawer()).toBeNull();
-    expect((await createLocalRepo().listTrades()).map((t) => t.instrument)).toEqual(['NQ']);
+    expect(el.textContent).not.toContain('EURUSD');
+    expect(document.body.textContent).toContain('Trade supprimé');
+
+    // Annulation avant la fin du délai : le trade revient et rien n’est supprimé
+    await clickButton(document.body, 'Annuler');
+    await waitForText(el, 'EURUSD');
+    expect((await createLocalRepo().listTrades()).map((t) => t.instrument).sort()).toEqual(['EURUSD', 'NQ']);
   });
 
   it('indique en mode démo que les captures demandent Supabase', async () => {

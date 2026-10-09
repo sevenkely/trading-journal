@@ -1,3 +1,4 @@
+import { useConfirm } from '../components/ConfirmDialog';
 import { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Check, Trash2, Upload } from 'lucide-react';
@@ -70,6 +71,7 @@ export default function ImportPage() {
   const repo = useRepo();
   const refresh = useRefresh();
   const toast = useToast();
+  const confirm = useConfirm();
   const { data: accounts, isLoading: loadingAccounts } = useAccounts();
   const { data: trades, isLoading: loadingTrades } = useTrades();
   const { data: batches, isLoading: loadingBatches } = useBatches();
@@ -465,10 +467,14 @@ export default function ImportPage() {
                       variant="ghost"
                       className="text-loss hover:text-loss"
                       loading={deleteBatch.isPending && deleteBatch.variables === b.id}
-                      onClick={() => {
-                        if (window.confirm('Annuler cet import ? Tous les trades créés par cet import seront supprimés.')) {
-                          deleteBatch.mutate(b.id);
-                        }
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: 'Annuler cet import ?',
+                          description: 'Tous les trades créés par cet import seront supprimés.',
+                          confirmLabel: 'Supprimer les trades',
+                          danger: true,
+                        });
+                        if (ok) deleteBatch.mutate(b.id);
                       }}
                     >
                       <Trash2 className="h-3.5 w-3.5" aria-hidden />

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import CommandPalette from './CommandPalette';
+import { useShortcuts } from './useShortcuts';
 import { EASE, Loading, SEARCH_SHORTCUT, buttonStyles, cn } from './ui';
 import { LogoMark } from './Logo';
 
@@ -118,6 +119,7 @@ export default function Layout() {
   const { mode, email, signOut } = useAuth();
   const location = useLocation();
   const outlet = useOutlet();
+  useShortcuts();
   const reduce = useReducedMotion();
   const [moreOpen, setMoreOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
