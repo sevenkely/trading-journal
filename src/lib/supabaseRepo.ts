@@ -21,6 +21,10 @@ function check(error: { message: string } | null): void {
   if (error) throw new Error(error.message);
 }
 
+/** Taille des lots pour les filtres `in` (évite des URL trop longues). */
+const CHUNK = 200;
+
+
 const orNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 
 /** PostgREST peut renvoyer des numériques sous forme de chaînes : on normalise. */
@@ -60,6 +64,38 @@ function toAccount(row: unknown): Account {
     consistency_pct: orNull(r.consistency_pct),
     min_trading_days: Number(r.min_trading_days ?? 0),
   };
+}
+
+/**
+ * Chemins des captures des trades rattachés aux valeurs données, lus avant suppression
+ * (une fois les lignes effacées, ils ne sont plus accessibles).
+ */
+async function screenshotPaths(
+  sb: SupabaseClient,
+  column: 'id' | 'account_id' | 'import_batch_id',
+  values: string[],
+): Promise<string[]> {
+  const paths: string[] = [];
+  for (let i = 0; i < values.length; i += CHUNK) {
+    const { data, error } = await sb
+      .from('trades')
+      .select('screenshots')
+      .in(column, values.slice(i, i + CHUNK));
+    check(error);
+    for (const row of data ?? []) paths.push(...((row as { screenshots: string[] | null }).screenshots ?? []));
+  }
+  return paths;
+}
+
+/**
+ * Supprime les fichiers du bucket une fois les lignes effacées. Échec non bloquant : le trade est déjà supprimé,
+ * un fichier restant ne fait que prendre de la place.
+ */
+async function removeScreenshotFiles(sb: SupabaseClient, paths: string[]): Promise<void> {
+  for (let i = 0; i < paths.length; i += CHUNK) {
+    const { error } = await sb.storage.from(SCREENSHOT_BUCKET).remove(paths.slice(i, i + CHUNK));
+    if (error) console.warn('Captures non supprimées du stockage :', error.message);
+  }
 }
 
 export function createSupabaseRepo(sb: SupabaseClient, userId: string): Repo {
@@ -112,8 +148,10 @@ export function createSupabaseRepo(sb: SupabaseClient, userId: string): Repo {
     },
 
     async deleteAccount(id) {
+      const paths = await screenshotPaths(sb, 'account_id', [id]);
       const { error } = await sb.from('accounts').delete().eq('id', id);
       check(error);
+      await removeScreenshotFiles(sb, paths);
     },
 
     async listTrades() {
@@ -134,8 +172,14 @@ export function createSupabaseRepo(sb: SupabaseClient, userId: string): Repo {
       return out;
     },
 
-    async createTrade(input: TradeInput) {
-      const { data, error } = await sb.from('trades').insert({ ...input, user_id: userId }).select().single();
+    async createTrade(input: TradeInput, extra?: { id?: string; screenshots?: string[] }) {
+      const row = {
+        ...input,
+        ...(extra?.id ? { id: extra.id } : {}),
+        screenshots: extra?.screenshots ?? [],
+        user_id: userId,
+      };
+      const { data, error } = await sb.from('trades').insert(row).select().single();
       check(error);
       return toTrade(data);
     },
@@ -148,8 +192,10 @@ export function createSupabaseRepo(sb: SupabaseClient, userId: string): Repo {
 
     async deleteTrades(ids) {
       if (ids.length === 0) return;
+      const paths = await screenshotPaths(sb, 'id', ids);
       const { error } = await sb.from('trades').delete().in('id', ids);
       check(error);
+      await removeScreenshotFiles(sb, paths);
     },
 
     async insertTrades(inputs) {
@@ -178,8 +224,11 @@ export function createSupabaseRepo(sb: SupabaseClient, userId: string): Repo {
     },
 
     async deleteImportBatch(id) {
+      // Les trades de l'import disparaissent avec lui (cascade) : on lit leurs captures avant
+      const paths = await screenshotPaths(sb, 'import_batch_id', [id]);
       const { error } = await sb.from('import_batches').delete().eq('id', id);
       check(error);
+      await removeScreenshotFiles(sb, paths);
     },
 
     async listDailyNotes() {

@@ -31,8 +31,8 @@ function write<T>(name: string, value: T): void {
 
 const nowIso = () => new Date().toISOString();
 
-function buildTrade(input: TradeInput, existing?: Trade): Trade {
-  const base = existing ?? { id: newId(), screenshots: [] as string[], created_at: nowIso() };
+function buildTrade(input: TradeInput, existing?: Trade, id?: string): Trade {
+  const base = existing ?? { id: id ?? newId(), screenshots: [] as string[], created_at: nowIso() };
   const merged = { ...base, ...input };
   const gross = Number(merged.gross_pnl);
   const fees = Number(merged.fees);
@@ -101,9 +101,10 @@ export function createLocalRepo(): Repo {
       return read<Trade[]>('trades', []);
     },
 
-    async createTrade(input) {
+    async createTrade(input, extra) {
       const trades = read<Trade[]>('trades', []);
-      const trade = buildTrade(input);
+      const built = buildTrade(input, undefined, extra?.id);
+      const trade = extra?.screenshots ? { ...built, screenshots: extra.screenshots } : built;
       write('trades', [...trades, trade]);
       return trade;
     },

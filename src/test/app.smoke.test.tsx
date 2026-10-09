@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import { AuthProvider } from '../auth/AuthContext';
 import { ToastProvider } from '../components/Toast';
@@ -316,5 +316,132 @@ describe('application en mode démo', () => {
       });
     }
     expect(el.querySelector('[role="dialog"]')).toBeNull();
+  });
+});
+
+describe('détail d’un trade depuis la page Trades', () => {
+  beforeEach(() => localStorage.clear());
+
+  /** Ligne du tableau (bureau) : son bouton porte l’instrument comme seul texte. */
+  function rowButton(el: HTMLElement, instrument: string): HTMLButtonElement {
+    const found = [...el.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === instrument);
+    if (!found) throw new Error(`Ligne introuvable : ${instrument}`);
+    return found;
+  }
+
+  /** Le tiroir est rendu dans <body> (portail) : on le cherche dans tout le document. */
+  function drawer(): HTMLElement | null {
+    return document.querySelector<HTMLElement>('[role="dialog"]');
+  }
+
+  function drawerButton(label: string): HTMLButtonElement | undefined {
+    return [...(drawer()?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find(
+      (b) => b.getAttribute('aria-label') === label,
+    );
+  }
+
+  function pressKey(key: string) {
+    return act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key }));
+    });
+  }
+
+  async function openRow(el: HTMLElement, instrument: string) {
+    await act(async () => {
+      rowButton(el, instrument).click();
+    });
+    await settle();
+  }
+
+  it('ouvre le tiroir au clic sur une ligne, avec le détail du trade', async () => {
+    await seed();
+    const el = await mountAt('/trades', 'EURUSD');
+    await openRow(el, 'EURUSD');
+
+    const dialog = drawer();
+    expect(dialog).not.toBeNull();
+    expect(dialog?.querySelector('h2')?.textContent).toBe('EURUSD');
+    expect(dialog?.textContent).toContain('Discipline & psychologie');
+    expect(dialog?.textContent).toMatch(/\d \/ 2/);
+    expect(drawerButton('Trade suivant')).toBeDefined();
+  });
+
+  it('passe au trade suivant ou précédent, avec les boutons puis avec les flèches du clavier', async () => {
+    await seed();
+    const el = await mountAt('/trades', 'EURUSD');
+    await openRow(el, 'EURUSD');
+    const start = drawer()?.querySelector('h2')?.textContent;
+    const next = drawerButton('Trade suivant');
+    const prev = drawerButton('Trade précédent');
+    // Deux trades : selon la position, exactement un des deux boutons est désactivé
+    expect([next?.disabled, prev?.disabled].filter(Boolean)).toHaveLength(1);
+
+    const forward = next !== undefined && !next.disabled;
+    await act(async () => {
+      (forward ? next : prev)?.click();
+    });
+    await settle();
+    const other = start === 'EURUSD' ? 'NQ' : 'EURUSD';
+    expect(drawer()?.querySelector('h2')?.textContent).toBe(other);
+
+    await pressKey(forward ? 'ArrowLeft' : 'ArrowRight');
+    await settle();
+    expect(drawer()?.querySelector('h2')?.textContent).toBe(start);
+  });
+
+  it('se ferme avec Échap et rend le focus à la ligne d’origine', async () => {
+    await seed();
+    const el = await mountAt('/trades', 'EURUSD');
+    const row = rowButton(el, 'EURUSD');
+    await act(async () => {
+      row.focus();
+      row.click();
+    });
+    await settle();
+    expect(drawer()).not.toBeNull();
+
+    await pressKey('Escape');
+    await settle();
+    expect(drawer()).toBeNull();
+    expect(document.activeElement).toBe(row);
+  });
+
+  it('la case de sélection ne déclenche pas l’ouverture du tiroir', async () => {
+    await seed();
+    const el = await mountAt('/trades', 'EURUSD');
+    const checkbox = el.querySelector<HTMLInputElement>('tbody input[type="checkbox"]');
+    expect(checkbox).not.toBeNull();
+    await act(async () => {
+      checkbox?.click();
+    });
+    await settle();
+    expect(drawer()).toBeNull();
+  });
+
+  it('supprime le trade depuis le tiroir après confirmation', async () => {
+    await seed();
+    const el = await mountAt('/trades', 'EURUSD');
+    await openRow(el, 'EURUSD');
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    await clickButton(drawer() ?? el, 'Supprimer');
+
+    expect(confirm).toHaveBeenCalled();
+    confirm.mockRestore();
+    const started = Date.now();
+    while (drawer() && Date.now() - started < 5_000) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      });
+    }
+    expect(drawer()).toBeNull();
+    expect((await createLocalRepo().listTrades()).map((t) => t.instrument)).toEqual(['NQ']);
+  });
+
+  it('indique en mode démo que les captures demandent Supabase', async () => {
+    await seed();
+    const el = await mountAt('/trades/nouveau', 'Résultat & risque');
+    expect(el.textContent).toContain('Les captures sont disponibles lorsque la base Supabase est connectée');
+    expect(el.querySelector('input[type="file"]')).toBeNull();
   });
 });

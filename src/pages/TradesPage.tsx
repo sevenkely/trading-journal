@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { Check, Download, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { useAccounts, useRefresh, useRepo, useTrades } from '../data/hooks';
@@ -7,6 +7,7 @@ import { computeStats, sortByTradeTime, tradeTime } from '../lib/metrics';
 import { dayKey, formatDateTime, formatPercent, formatProfitFactor, formatR } from '../lib/format';
 import { tradesToCsv } from '../lib/csv';
 import { errorMessage, useToast } from '../components/Toast';
+import { TradeDrawer } from '../components/TradeDrawer';
 import { Badge, Button, Card, EmptyState, Input, Loading, PageHeader, Select, Segmented, Stat, StatStrip, buttonStyles, PnlAmount } from '../components/ui';
 
 const BROWSER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -32,6 +33,9 @@ export default function TradesPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Trade ouvert dans le détail : dans l’URL (?trade=…), pour revenir au même endroit
+  const [params, setParams] = useSearchParams();
+  const openId = params.get('trade');
 
   const remove = useMutation({
     mutationFn: (ids: string[]) => repo.deleteTrades(ids),
@@ -62,6 +66,25 @@ export default function TradesPage() {
       if (to && day > to) return false;
       return true;
     });
+
+  const openIndex = openId ? rows.findIndex((t) => t.id === openId) : -1;
+  const openTradeData = openId ? (trades ?? []).find((t) => t.id === openId) ?? null : null;
+
+  const setOpenTrade = (id: string | null) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (id) next.set('trade', id);
+        else next.delete('trade');
+        return next;
+      },
+      { replace: true },
+    );
+
+  const goToOpenTrade = (offset: number) => {
+    const target = rows[openIndex + offset];
+    if (target) setOpenTrade(target.id);
+  };
 
   const stats = computeStats(rows, BROWSER_TZ);
   const allSelected = rows.length > 0 && rows.every((t) => selected.has(t.id));
@@ -230,7 +253,14 @@ export default function TradesPage() {
                   {rows.map((t) => {
                     const account = accountById.get(t.account_id);
                     return (
-                      <tr key={t.id} className="transition-colors hover:bg-surface-2/60">
+                      <tr
+                        key={t.id}
+                        className="cursor-pointer transition-colors hover:bg-surface-2/60"
+                        onClick={(event) => {
+                          // Les cases, boutons et liens gardent leur propre action
+                          if (!(event.target as HTMLElement).closest('a, button, input, label')) setOpenTrade(t.id);
+                        }}
+                      >
                         <td className="px-4 py-3">
                           <input
                             type="checkbox"
@@ -242,7 +272,17 @@ export default function TradesPage() {
                         </td>
                         <td className="whitespace-nowrap px-3 py-3 text-fg-2">{formatDateTime(t.opened_at)}</td>
                         <td className="max-w-40 truncate px-3 py-3 text-muted">{account?.name ?? '—'}</td>
-                        <td className="px-3 py-3 font-medium text-fg">{t.instrument}</td>
+                        <td className="px-3 py-3">
+                          <button
+                            type="button"
+                            aria-haspopup="dialog"
+                            aria-label={`Voir le détail du trade ${t.instrument}, ${formatDateTime(t.opened_at)}`}
+                            onClick={() => setOpenTrade(t.id)}
+                            className="rounded font-medium text-fg transition-colors hover:text-accent"
+                          >
+                            {t.instrument}
+                          </button>
+                        </td>
                         <td className="px-3 py-3">
                           <Badge tone={t.direction === 'long' ? 'good' : 'bad'}>{t.direction === 'long' ? 'Achat' : 'Vente'}</Badge>
                         </td>
@@ -299,7 +339,12 @@ export default function TradesPage() {
                     onChange={() => toggle(t.id)}
                     className="h-5 w-5 shrink-0 accent-accent"
                   />
-                  <Link to={`/trades/${t.id}`} className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    aria-haspopup="dialog"
+                    onClick={() => setOpenTrade(t.id)}
+                    className="min-w-0 flex-1 rounded-lg text-left"
+                  >
                     <span className="flex items-center gap-2">
                       <span className="font-semibold text-fg">{t.instrument}</span>
                       <Badge tone={t.direction === 'long' ? 'good' : 'bad'}>{t.direction === 'long' ? 'Achat' : 'Vente'}</Badge>
@@ -308,13 +353,25 @@ export default function TradesPage() {
                       {formatDateTime(t.opened_at)} · {account?.name ?? '—'}
                       {t.setup ? ` · ${t.setup}` : ''}
                     </span>
-                  </Link>
+                  </button>
                   <PnlAmount value={t.net_pnl} currency={account?.currency ?? 'USD'} className="shrink-0 text-right font-semibold" />
                 </li>
               );
             })}
           </ul>
         </>
+      )}
+
+      {openTradeData && (
+        <TradeDrawer
+          trade={openTradeData}
+          account={accountById.get(openTradeData.account_id)}
+          position={openIndex >= 0 ? { index: openIndex, total: rows.length } : null}
+          onPrev={openIndex > 0 ? () => goToOpenTrade(-1) : null}
+          onNext={openIndex >= 0 && openIndex < rows.length - 1 ? () => goToOpenTrade(1) : null}
+          onClose={() => setOpenTrade(null)}
+          onDeleted={() => setOpenTrade(null)}
+        />
       )}
     </>
   );

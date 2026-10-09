@@ -170,4 +170,25 @@ describe('accessibilité : axe-core, WCAG 2.2 niveaux A et AA', () => {
     const violations = await auditViolations(host);
     expect(violations).toEqual([]);
   }, 60_000);
+
+  it('aucune violation sur la saisie d’un nouveau trade, captures comprises', async () => {
+    await seed();
+    const host = await mountAt('/trades/nouveau', 'Captures d’écran');
+    expect(await auditViolations(host)).toEqual([]);
+  }, 60_000);
+
+  it('aucune violation avec le tiroir de détail ouvert depuis la liste des trades', async () => {
+    await seed();
+    const host = await mountAt('/trades', 'EURUSD');
+    const row = [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'EURUSD');
+    expect(row).toBeDefined();
+    await act(async () => {
+      row?.click();
+    });
+    await settle();
+    // Le tiroir est rendu dans <body> (portail) : on audite le dialogue lui-même
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(await auditViolations(dialog ?? host)).toEqual([]);
+  }, 60_000);
 });

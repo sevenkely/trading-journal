@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatSignedCompact, pnlGlyph, signClass } from './format';
+import { formatDuration, formatSignedCompact, pnlGlyph, signClass } from './format';
 
 describe('pnlGlyph', () => {
   it('▲ pour un gain, ▼ pour une perte, rien pour zéro ou une valeur absente', () => {
@@ -25,5 +25,29 @@ describe('formatSignedCompact', () => {
     expect(formatSignedCompact(1671.38).replace(/\s/g, ' ')).toBe('+1 671');
     expect(formatSignedCompact(-341.64).replace(/\s/g, ' ')).toBe('-342');
     expect(formatSignedCompact(0)).toBe('0');
+  });
+});
+
+describe('formatDuration', () => {
+  const MIN = 60_000;
+
+  it('affiche les durées courtes en minutes', () => {
+    expect(formatDuration(0)).toBe('< 1 min');
+    expect(formatDuration(45 * MIN)).toBe('45 min');
+  });
+
+  it('affiche les heures, avec les minutes restantes', () => {
+    expect(formatDuration(72 * MIN)).toBe('1 h 12 min');
+    expect(formatDuration(120 * MIN)).toBe('2 h');
+  });
+
+  it('affiche les jours au-delà de 24 heures', () => {
+    expect(formatDuration(26 * 60 * MIN)).toBe('1 j 2 h');
+  });
+
+  it('affiche un tiret sans durée valide', () => {
+    expect(formatDuration(null)).toBe('—');
+    expect(formatDuration(undefined)).toBe('—');
+    expect(formatDuration(-1)).toBe('—');
   });
 });

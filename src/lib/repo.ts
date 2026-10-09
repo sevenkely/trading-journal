@@ -27,7 +27,11 @@ export interface Repo {
   deleteAccount(id: string): Promise<void>;
 
   listTrades(): Promise<Trade[]>;
-  createTrade(input: TradeInput): Promise<Trade>;
+  /**
+   * `extra.id` : identifiant choisi à l'avance (les captures sont envoyées avant le trade, dans son dossier).
+   * `extra.screenshots` : chemins des captures déjà envoyées.
+   */
+  createTrade(input: TradeInput, extra?: { id?: string; screenshots?: string[] }): Promise<Trade>;
   updateTrade(id: string, patch: Partial<TradeInput> & { screenshots?: string[] }): Promise<Trade>;
   deleteTrades(ids: string[]): Promise<void>;
   insertTrades(inputs: TradeInput[]): Promise<number>;

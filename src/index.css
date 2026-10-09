@@ -172,6 +172,37 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
   filter: drop-shadow(0 16px 24px color-mix(in oklab, var(--color-accent) 16%, transparent));
 }
 
+/* Tiroir de détail d’un trade : glisse depuis la droite sur ordinateur, depuis le bas sur mobile */
+@keyframes drawer-in-x {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+}
+
+@keyframes drawer-in-y {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+
+.trade-drawer {
+  animation: drawer-in-y 420ms var(--ease-out-expo) both;
+}
+
+@media (min-width: 768px) {
+  .trade-drawer {
+    animation-name: drawer-in-x;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trade-drawer {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

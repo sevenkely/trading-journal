@@ -1,14 +1,16 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ImagePlus, Trash2, X } from 'lucide-react';
+import { useMutation } from '@tanstack/react-query';
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import { useAccounts, useProfile, useRefresh, useRepo, useTrades } from '../data/hooks';
 import { EMOTIONS, MISTAKES, SESSIONS, TIMEFRAMES } from '../lib/constants';
 import { formatMoney, formatR, fromDateTimeLocal, toDateTimeLocal } from '../lib/format';
 import { sessionForDate } from '../lib/metrics';
-import { round2 } from '../lib/utils';
+import { newId, round2 } from '../lib/utils';
+import { MAX_SCREENSHOTS, createTradeWithScreenshots } from '../lib/screenshots';
 import type { Account, Direction, Trade, TradeInput } from '../lib/types';
 import { errorMessage, useToast } from '../components/Toast';
+import { PendingShotThumb, ScreenshotDropzone, ShotThumb } from '../components/Screenshots';
 import {
   Button,
   Card,
@@ -33,6 +35,13 @@ const numOrNull = (v: string): number | null => {
 };
 
 const str = (v: number | null | undefined): string => (v === null || v === undefined ? '' : String(v));
+
+/** Capture d’un nouveau trade, pas encore envoyée. `url` sert à l’aperçu. */
+interface PendingShot {
+  id: string;
+  file: File;
+  url: string;
+}
 
 interface TradeFormState {
   account_id: string;
@@ -249,6 +258,24 @@ function TradeForm({
   const navigate = useNavigate();
   const [form, setForm] = useState<TradeFormState>(() => initialState(trade, accounts));
   const [error, setError] = useState<string | null>(null);
+  // Captures d’un nouveau trade : gardées en mémoire, envoyées à l’enregistrement
+  const [shots, setShots] = useState<PendingShot[]>([]);
+  const shotsRef = useRef(shots);
+  useEffect(() => {
+    shotsRef.current = shots;
+  }, [shots]);
+  useEffect(() => () => shotsRef.current.forEach((shot) => URL.revokeObjectURL(shot.url)), []);
+
+  const addShots = (files: File[]) => {
+    const created = files.map((file) => ({ id: newId(), file, url: URL.createObjectURL(file) }));
+    setShots((prev) => [...prev, ...created]);
+  };
+
+  const removeShot = (id: string) => {
+    const target = shotsRef.current.find((shot) => shot.id === id);
+    if (target) URL.revokeObjectURL(target.url);
+    setShots((prev) => prev.filter((shot) => shot.id !== id));
+  };
 
   const set = <K extends keyof TradeFormState>(key: K, value: TradeFormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -260,7 +287,8 @@ function TradeForm({
     });
 
   const save = useMutation({
-    mutationFn: async (input: TradeInput) => (trade ? repo.updateTrade(trade.id, input) : repo.createTrade(input)),
+    mutationFn: async ({ input, files }: { input: TradeInput; files: File[] }) =>
+      trade ? repo.updateTrade(trade.id, input) : createTradeWithScreenshots(repo, input, files),
     onSuccess: async () => {
       await refresh();
       toast.show(trade ? 'Trade mis à jour' : 'Trade enregistré');
@@ -287,7 +315,7 @@ function TradeForm({
       return;
     }
     setError(null);
-    save.mutate(built.input);
+    save.mutate({ input: built.input, files: shots.map((shot) => shot.file) });
   };
 
   // Aperçu du résultat net et du R multiple
@@ -390,6 +418,8 @@ function TradeForm({
             </Field>
           </div>
         </Card>
+
+        <ScreenshotsPanel trade={trade} pending={shots} onAdd={addShots} onRemovePending={removeShot} />
 
         <Card className="space-y-6">
           <SectionTitle title="Résultat & risque" description="Le P&L net = P&L brut − frais. Un gain est positif, une perte négative." />
@@ -546,8 +576,6 @@ function TradeForm({
           </Field>
         </Card>
 
-        {trade && <ScreenshotsPanel trade={trade} />}
-
         {error && (
           <p role="alert" className="rounded-xl border border-loss/30 bg-loss/10 px-4 py-3 text-sm text-loss">
             {error}
@@ -584,25 +612,45 @@ function TradeForm({
   );
 }
 
-function ScreenshotsPanel({ trade }: { trade: Trade }) {
+function ScreenshotsPanel({
+  trade,
+  pending,
+  onAdd,
+  onRemovePending,
+}: {
+  trade: Trade | null;
+  pending: PendingShot[];
+  onAdd: (files: File[]) => void;
+  onRemovePending: (id: string) => void;
+}) {
   const repo = useRepo();
   const refresh = useRefresh();
   const toast = useToast();
 
+  // Trade existant : chaque capture part tout de suite et s’ajoute au trade
   const upload = useMutation({
-    mutationFn: async (file: File) => {
-      const path = await repo.uploadScreenshot(trade.id, file);
-      await repo.updateTrade(trade.id, { screenshots: [...trade.screenshots, path] });
+    mutationFn: async (files: File[]) => {
+      if (!trade) return;
+      const paths: string[] = [];
+      try {
+        for (const file of files) paths.push(await repo.uploadScreenshot(trade.id, file));
+        await repo.updateTrade(trade.id, { screenshots: [...trade.screenshots, ...paths] });
+      } catch (error) {
+        // Rien ne doit rester dans le stockage sans référence dans le trade
+        await Promise.allSettled(paths.map((path) => repo.deleteScreenshotFile(path)));
+        throw error;
+      }
     },
     onSuccess: async () => {
       await refresh();
-      toast.show('Capture ajoutée');
+      toast.show('Captures ajoutées');
     },
     onError: (e) => toast.show(errorMessage(e), 'error'),
   });
 
   const removeShot = useMutation({
     mutationFn: async (path: string) => {
+      if (!trade) return;
       await repo.updateTrade(trade.id, { screenshots: trade.screenshots.filter((p) => p !== path) });
       await repo.deleteScreenshotFile(path);
     },
@@ -613,72 +661,43 @@ function ScreenshotsPanel({ trade }: { trade: Trade }) {
     onError: (e) => toast.show(errorMessage(e), 'error'),
   });
 
+  const count = trade ? trade.screenshots.length : pending.length;
+
   return (
     <Card className="space-y-5">
-      <SectionTitle title="Captures d’écran" description="Graphiques d’entrée et de sortie, pour la revue visuelle." />
+      <SectionTitle
+        title="Captures d’écran"
+        description={`Graphiques d’entrée et de sortie, pour la revue visuelle. ${MAX_SCREENSHOTS} captures au maximum par trade.`}
+      />
       {!repo.supportsScreenshots ? (
         <p className="text-sm text-muted">
-          Les captures sont disponibles lorsque la base Supabase est connectée (le mode démo ne les stocke pas).
+          Les captures sont disponibles lorsque la base Supabase est connectée. Le mode démo ne les stocke pas.
         </p>
       ) : (
         <>
-          {trade.screenshots.length === 0 && <p className="text-sm text-muted">Aucune capture pour l’instant.</p>}
-          <div className="flex flex-wrap gap-3">
-            {trade.screenshots.map((path) => (
-              <ShotThumb key={path} path={path} onRemove={() => removeShot.mutate(path)} />
-            ))}
-          </div>
-          <label
-            className={cn(
-              buttonStyles('secondary'),
-              'cursor-pointer',
-              upload.isPending && 'pointer-events-none opacity-60',
-            )}
-          >
-            <ImagePlus className="h-4 w-4" aria-hidden />
-            {upload.isPending ? 'Envoi…' : 'Ajouter une capture'}
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="sr-only"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) upload.mutate(file);
-                e.target.value = '';
-              }}
-            />
-          </label>
+          {count > 0 && (
+            <div className="flex flex-wrap gap-3">
+              {trade
+                ? trade.screenshots.map((path) => (
+                    <ShotThumb key={path} path={path} onRemove={() => removeShot.mutate(path)} />
+                  ))
+                : pending.map((shot, index) => (
+                    <PendingShotThumb
+                      key={shot.id}
+                      index={index}
+                      url={shot.url}
+                      onRemove={() => onRemovePending(shot.id)}
+                    />
+                  ))}
+            </div>
+          )}
+          <ScreenshotDropzone
+            count={count}
+            disabled={upload.isPending || removeShot.isPending}
+            onFiles={trade ? (files) => upload.mutate(files) : onAdd}
+          />
         </>
       )}
     </Card>
-  );
-}
-
-function ShotThumb({ path, onRemove }: { path: string; onRemove: () => void }) {
-  const repo = useRepo();
-  const { data: url } = useQuery({
-    queryKey: ['screenshot', path],
-    queryFn: () => repo.getScreenshotUrl(path),
-    staleTime: 30 * 60_000,
-  });
-
-  return (
-    <div className="group relative h-28 w-44 overflow-hidden rounded-xl border border-line-2 bg-ink">
-      {url ? (
-        <a href={url} target="_blank" rel="noreferrer" className="block h-full w-full">
-          <img src={url} alt="Capture du trade" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
-        </a>
-      ) : (
-        <div className="skeleton flex h-full items-center justify-center rounded-none text-xs text-muted">Chargement…</div>
-      )}
-      <button
-        type="button"
-        onClick={onRemove}
-        className="absolute right-1.5 top-1.5 rounded-lg bg-ink/85 p-1.5 text-fg-2 opacity-100 transition hover:text-loss md:opacity-0 md:group-hover:opacity-100"
-        aria-label="Supprimer la capture"
-      >
-        <X className="h-3.5 w-3.5" aria-hidden />
-      </button>
-    </div>
   );
 }

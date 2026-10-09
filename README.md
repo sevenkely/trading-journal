@@ -33,7 +33,7 @@ Sans variables Supabase, l’application démarre en **mode démo** : les donné
 ## Configuration Supabase
 
 1. **Créer le projet** sur [supabase.com](https://supabase.com).
-2. **Créer le schéma** : dans *SQL Editor*, colle le contenu de `supabase/migrations/0001_init.sql` puis clique sur *Run*. Le script crée les tables, les règles RLS, le trigger de création de profil et le bucket privé `trade-screenshots`.
+2. **Créer le schéma** : dans *SQL Editor*, colle le contenu de `supabase/migrations/0001_init.sql` puis clique sur *Run*. Le script crée les tables, les règles RLS, le trigger de création de profil et le bucket privé `trade-screenshots`. Lance ensuite `supabase/migrations/0002_screenshots_limits.sql` : il limite le bucket aux images de 10 Mo et chaque trade à 4 captures.
 3. **Activer la connexion par email** : *Authentication → Sign In / Providers → Email* (lien magique activé).
 4. **Passer en invitation uniquement** : dans les réglages d’authentification, désactive **« Allow new users to sign up »**. Personne ne peut plus créer de compte seul.
 5. **Définir les URL** : *Authentication → URL Configuration*.
@@ -108,6 +108,7 @@ src/
   pages/        une page par écran
   test/         jeux de données et test de fumée
 supabase/migrations/0001_init.sql   schéma, RLS, trigger et bucket de captures
+supabase/migrations/0002_screenshots_limits.sql   limites du bucket (taille, types) et 4 captures par trade
 ```
 
 ## Limites connues
