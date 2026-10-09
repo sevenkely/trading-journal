@@ -12,6 +12,7 @@ import { computeStats, sortByTradeTime, tradeTime } from '../lib/metrics';
 import { mondayOf, shiftDays, weekKeys } from '../lib/patterns';
 import type { Account, Trade } from '../lib/types';
 import { Badge, Button, Card, Loading, PageHeader, SectionTitle, Stat, StatStrip, cn, PnlAmount, type Tone } from '../components/ui';
+import { Logo } from '../components/Logo';
 
 const AXIS = { fill: '#7d8899', fontSize: 11 };
 const TOOLTIP = {
@@ -194,6 +195,10 @@ export default function ReportPage() {
 
   return (
     <>
+      <div className="mb-6 hidden items-center justify-between border-b border-black/25 pb-3 text-black print:flex">
+        <Logo mono size="sm" />
+        <span className="text-xs">Imprimé le {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+      </div>
       <PageHeader
         title="Bilan de la semaine"
         description={`Du ${dayText(week[0], { day: 'numeric', month: 'long' })} au ${dayText(week[6], { day: 'numeric', month: 'long', year: 'numeric' })}.`}

@@ -175,7 +175,7 @@ export function TradeDrawer({ trade, account, position, onPrev, onNext, onClose,
 
           <div className="mt-6 rounded-2xl border border-line-2 bg-surface-2/60 p-5 md:p-6">
             <p className="text-[13px] text-muted">P&amp;L net</p>
-            <PnlAmount value={trade.net_pnl} currency={currency} className="mt-1 block font-serif text-4xl tracking-tight md:text-5xl" />
+            <PnlAmount value={trade.net_pnl} currency={currency} className="mt-1 block text-4xl font-semibold tracking-tight md:text-5xl" />
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted">
               {realizedR !== null && (
                 <Badge tone={realizedR > 0 ? 'good' : realizedR < 0 ? 'bad' : 'neutral'}>{formatR(realizedR)}</Badge>

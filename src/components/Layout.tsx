@@ -21,6 +21,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import CommandPalette from './CommandPalette';
 import { EASE, Loading, SEARCH_SHORTCUT, buttonStyles, cn } from './ui';
+import { LogoMark } from './Logo';
 
 interface NavEntry {
   to: string;
@@ -50,23 +51,9 @@ const MORE = NAV.filter((entry) => !TAB_PATHS.includes(entry.to));
 function Brand() {
   return (
     <Link to="/" className="flex items-center gap-3">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent text-accent-ink shadow-lg shadow-accent/25">
-        <svg
-          viewBox="0 0 24 24"
-          className="h-[18px] w-[18px]"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2.4}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-        >
-          <path d="M3 17l5.5-5.5 4 4L21 6.5" />
-          <path d="M15 6.5h6v6" />
-        </svg>
-      </span>
+      <LogoMark size="md" animate />
       <span className="leading-tight">
-        <span className="block font-serif text-[22px] text-fg">Trading Journal</span>
+        <span className="block text-[15px] font-semibold tracking-tight text-fg">Trading Journal</span>
         <span className="block text-[11px] text-muted">Prop firm &amp; compte perso</span>
       </span>
     </Link>
@@ -149,7 +136,7 @@ export default function Layout() {
   const initial = email?.charAt(0).toUpperCase() ?? '?';
 
   return (
-    <div className="app-glow app-grid relative min-h-dvh">
+    <div className="app-glow relative min-h-dvh">
       {/* Navigation latérale (ordinateur) */}
       <aside className="no-print fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-line bg-panel/90 px-4 py-6 backdrop-blur-xl md:flex">
         <Brand />

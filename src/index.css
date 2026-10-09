@@ -29,6 +29,9 @@
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 30px 60px -40px rgb(0 0 0 / 0.9);
+  --radius-card: 1rem;
+  --radius-control: 0.75rem;
+  --shadow-overlay: 0 24px 60px -20px rgb(0 0 0 / 0.75);
 }
 
 :root {
@@ -61,6 +64,36 @@ h3 {
 }
 
 /* Palette daltonienne (réglage Paramètres) : bleu et orange au lieu de vert et rouge */
+/* Thème clair (Paramètres > Affichage) : mêmes noms de tokens, contrastes AA sur fond blanc */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --color-ink: #f4f6f9;
+  --color-panel: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f4f8;
+  --color-surface-3: #e5eaf1;
+  --color-line: #e3e8f0;
+  --color-line-2: #cbd3df;
+  --color-fg: #0f172a;
+  --color-fg-2: #334155;
+  --color-muted: #5b6678;
+  --color-accent: #9a6200;
+  --color-accent-hi: #7c4f00;
+  --color-accent-ink: #ffffff;
+  --color-gain: #0a7d43;
+  --color-loss: #c0392b;
+  --color-danger: #b45309;
+  --color-info: #1d4ed8;
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 12px 28px -18px rgb(15 23 42 / 0.25);
+  --shadow-overlay: 0 24px 60px -24px rgb(15 23 42 / 0.35);
+}
+
+/* Palette daltonienne en thème clair : bleu et orange foncés, lisibles sur blanc */
+:root[data-theme='light'][data-palette='daltonien'] {
+  --color-gain: #1769aa;
+  --color-loss: #b8560f;
+}
+
 :root[data-palette='daltonien'] {
   --color-gain: #56b4e9;
   --color-loss: #e8743b;
@@ -86,51 +119,8 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
 
 /* Halo d'ambre discret en haut de page */
 .app-glow {
-  background-image:
-    radial-gradient(900px 520px at 0% -12%, color-mix(in oklab, var(--color-accent) 11%, transparent), transparent 65%),
-    radial-gradient(800px 480px at 100% 0%, color-mix(in oklab, var(--color-gain) 5%, transparent), transparent 60%);
+  background-image: radial-gradient(900px 520px at 0% -12%, color-mix(in oklab, var(--color-accent) 5%, transparent), transparent 65%);
   background-attachment: fixed;
-}
-
-/* Trame de graphique, qui s'estompe vers le bas */
-.app-grid::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(to right, rgb(255 255 255 / 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(255 255 255 / 0.03) 1px, transparent 1px);
-  background-size: 56px 56px;
-  -webkit-mask-image: radial-gradient(ellipse 75% 60% at 50% 0%, #000 20%, transparent 80%);
-  mask-image: radial-gradient(ellipse 75% 60% at 50% 0%, #000 20%, transparent 80%);
-}
-
-/* Carte dont la lumière suit le curseur (réponse directe à l'action de l'utilisateur) */
-.spot {
-  position: relative;
-  isolation: isolate;
-}
-
-.spot::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: 0;
-  background: radial-gradient(
-    380px circle at var(--mx, 50%) var(--my, 0%),
-    color-mix(in oklab, var(--color-accent) 12%, transparent),
-    transparent 70%
-  );
-  transition: opacity 500ms var(--ease-out-expo);
-}
-
-.spot:hover::before {
-  opacity: 1;
 }
 
 /* Squelette de chargement */
@@ -150,26 +140,6 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
     var(--color-surface-2);
   background-size: 250% 100%, auto;
   animation: shimmer 1.7s linear infinite;
-}
-
-/* Flottement doux de l'icône des états vides */
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-5px);
-  }
-}
-
-.float {
-  animation: float 6s ease-in-out infinite;
-}
-
-/* Lueur ambrée sous les graphiques */
-.chart-glow {
-  filter: drop-shadow(0 16px 24px color-mix(in oklab, var(--color-accent) 16%, transparent));
 }
 
 /* Tiroir de détail d’un trade : glisse depuis la droite sur ordinateur, depuis le bas sur mobile */
@@ -234,9 +204,7 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
     color: #111827 !important;
   }
 
-  .app-glow,
-  .app-grid,
-  .spot {
+  .app-glow {
     background-image: none !important;
     background-color: transparent !important;
   }
@@ -296,10 +264,6 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
   }
 
   .shadow-card,
-  .chart-glow {
-    box-shadow: none !important;
-    filter: none !important;
-  }
 
   .rounded-2xl,
   .rounded-xl {
@@ -316,4 +280,44 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Densité des tableaux (Paramètres > Affichage) */
+html[data-density='compact'] thead th,
+html[data-density='compact'] tbody td {
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+}
+
+/* Apparition en cascade : 6 éléments au plus, 300 ms au total */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.stagger > * {
+  animation: rise 0.5s var(--ease-out-expo) both;
+}
+
+.stagger > :nth-child(2) { animation-delay: 60ms; }
+.stagger > :nth-child(3) { animation-delay: 120ms; }
+.stagger > :nth-child(4) { animation-delay: 180ms; }
+.stagger > :nth-child(5) { animation-delay: 240ms; }
+.stagger > :nth-child(n + 6) { animation-delay: 300ms; }
+
+/* Jauge en zone de danger : pulsation lente (la règle reduce-motion globale la désactive) */
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.pulse-soft {
+  animation: pulse-soft 2.4s ease-in-out infinite;
 }

@@ -197,7 +197,7 @@ export default function DashboardPage() {
                 La courbe d’équité apparaîtra après ton premier trade.
               </div>
             ) : (
-              <div className="chart-glow h-full w-full">
+              <div className="h-full w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={series} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
                     <defs>

@@ -29,6 +29,7 @@ export function formatMoney(value: number | null | undefined, currency = 'USD', 
   return fixSpaces(new Intl.NumberFormat('fr-FR', {
     style: 'currency',
     currency,
+    currencyDisplay: 'narrowSymbol',
     maximumFractionDigits: 2,
     signDisplay: signed ? 'exceptZero' : 'auto',
   }).format(value));

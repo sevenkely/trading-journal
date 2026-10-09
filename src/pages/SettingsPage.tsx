@@ -11,6 +11,7 @@ import type { Profile } from '../lib/types';
 import { errorMessage, useToast } from '../components/Toast';
 import { usePalette } from '../components/PaletteContext';
 import { PALETTE_LABELS, PALETTE_NAMES } from '../lib/palette';
+import { applyDisplayPrefs, readDisplayPrefs, safeStorage, writeDisplayPrefs, type DisplayPrefs } from '../lib/display';
 import { Button, Card, Field, Input, Loading, PageHeader, Segmented, Select, SectionTitle } from '../components/ui';
 
 export default function SettingsPage() {
@@ -174,6 +175,7 @@ function SettingsForm({ profile }: { profile: Profile }) {
               Enregistré sur cet appareil. Le bleu et l’orange restent distinguables avec un daltonisme rouge-vert.
             </p>
           </div>
+          <DisplayControls />
           <div className="flex justify-end">
             <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
               Enregistrer
@@ -370,6 +372,47 @@ function SettingsForm({ profile }: { profile: Profile }) {
             </p>
           )}
         </Card>
+      </div>
+    </>
+  );
+}
+
+/** Densité des tableaux et thème : enregistrés sur cet appareil et appliqués tout de suite. */
+function DisplayControls() {
+  const [prefs, setPrefs] = useState<DisplayPrefs>(() => readDisplayPrefs(safeStorage()));
+  const update = (next: DisplayPrefs) => {
+    setPrefs(next);
+    writeDisplayPrefs(next, safeStorage());
+    applyDisplayPrefs(next, document.documentElement);
+  };
+  return (
+    <>
+      <div className="space-y-2">
+        <div className="text-[13px] text-muted">Densité des tableaux</div>
+        <Segmented
+          id="density"
+          label="Densité des tableaux"
+          options={[
+            { value: 'confortable', label: 'Confortable' },
+            { value: 'compact', label: 'Compact' },
+          ]}
+          value={prefs.density}
+          onChange={(density) => update({ ...prefs, density })}
+        />
+      </div>
+      <div className="space-y-2">
+        <div className="text-[13px] text-muted">Thème</div>
+        <Segmented
+          id="theme"
+          label="Thème"
+          options={[
+            { value: 'sombre', label: 'Sombre' },
+            { value: 'clair', label: 'Clair' },
+          ]}
+          value={prefs.theme}
+          onChange={(theme) => update({ ...prefs, theme })}
+        />
+        <p className="text-xs leading-relaxed text-muted">Enregistré sur cet appareil.</p>
       </div>
     </>
   );

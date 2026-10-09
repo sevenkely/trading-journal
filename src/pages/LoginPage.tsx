@@ -4,6 +4,7 @@ import { ArrowRight, Brain, Clock, Info, Lock, Mail, MailCheck, ShieldCheck, Upl
 import { useAuth } from '../auth/AuthContext';
 import { errorMessage } from '../components/Toast';
 import { Badge, Button, Card, EASE, Input, PnlAmount } from '../components/ui';
+import { Logo } from '../components/Logo';
 
 /** Délai avant de pouvoir demander un nouveau lien (en secondes). */
 const RESEND_SECONDS = 60;
@@ -217,24 +218,7 @@ export default function LoginPage() {
   return (
     <div className="app-glow flex min-h-dvh flex-col px-5 pb-12 pt-8 md:px-12 lg:grid lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:gap-16 lg:py-14">
       <header className="lg:col-start-1 lg:row-start-1 lg:self-start">
-        <div className="flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent text-accent-ink shadow-lg shadow-accent/25">
-            <svg
-              viewBox="0 0 24 24"
-              className="h-[18px] w-[18px]"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.4}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M3 17l5.5-5.5 4 4L21 6.5" />
-              <path d="M15 6.5h6v6" />
-            </svg>
-          </span>
-          <span className="font-serif text-[22px] text-fg">Trading Journal</span>
-        </div>
+        <Logo size="lg" animate />
 
         <motion.h1
           initial={reduce ? false : { opacity: 0, y: 18 }}
@@ -290,7 +274,7 @@ function LoginPreview() {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-[13px] text-muted">P&amp;L net · aperçu</p>
-          <PnlAmount value={2362.85} currency="USD" className="mt-1 block font-serif text-4xl tracking-tight md:text-5xl" />
+          <PnlAmount value={2362.85} currency="USD" className="mt-1 block text-4xl font-semibold tracking-tight md:text-5xl" />
         </div>
         <Badge>Données d’exemple</Badge>
       </div>
@@ -328,7 +312,7 @@ function LoginPreview() {
       <dl className="mt-4 grid grid-cols-3 divide-x divide-line border-t border-line pt-4">
         <PreviewStat label="Réussite" value="57 %" />
         <PreviewStat label="Respect du plan" value="76 %" />
-        <PreviewStat label="Perte du jour" value="0,00 $US" sub="limite 5\u00a0000\u00a0$US" />
+        <PreviewStat label="Perte du jour" value={'0,00\u00a0$'} sub={'limite 5\u00a0000\u00a0$'} />
       </dl>
     </div>
   );

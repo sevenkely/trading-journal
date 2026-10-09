@@ -6,7 +6,6 @@ import {
   type ButtonHTMLAttributes,
   type HTMLAttributes,
   type InputHTMLAttributes,
-  type PointerEvent,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
@@ -102,22 +101,12 @@ export function Field({
   );
 }
 
-function trackSpot(e: PointerEvent<HTMLDivElement>) {
-  const rect = e.currentTarget.getBoundingClientRect();
-  e.currentTarget.style.setProperty('--mx', `${e.clientX - rect.left}px`);
-  e.currentTarget.style.setProperty('--my', `${e.clientY - rect.top}px`);
-}
-
-export function Card({ className, children, onPointerMove, ...props }: HTMLAttributes<HTMLDivElement>) {
+export function Card({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       {...props}
-      onPointerMove={(e) => {
-        trackSpot(e);
-        onPointerMove?.(e);
-      }}
       className={cn(
-        'spot rounded-2xl border border-line bg-surface p-5 shadow-card transition-colors duration-300 hover:border-line-2',
+        'rounded-card border border-line bg-surface p-5 shadow-card transition-colors duration-300 hover:border-line-2',
         className,
       )}
     >
@@ -369,10 +358,10 @@ export function EmptyState({
 }) {
   return (
     <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-line-2 bg-surface/60 px-6 py-16 text-center">
-      <div className="float mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-line-2 bg-surface-2 text-accent shadow-lg shadow-black/30">
+      <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-line-2 bg-surface-2 text-accent">
         {icon}
       </div>
-      <h3 className="font-serif text-2xl text-fg">{title}</h3>
+      <h3 className="text-xl font-semibold tracking-tight text-fg">{title}</h3>
       {description && <p className="mt-2 max-w-md text-sm leading-relaxed text-muted">{description}</p>}
       {action && <div className="mt-6 flex flex-wrap justify-center gap-2">{action}</div>}
     </div>
