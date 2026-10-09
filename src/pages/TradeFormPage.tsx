@@ -12,21 +12,7 @@ import { MAX_SCREENSHOTS, createTradeWithScreenshots } from '../lib/screenshots'
 import type { Account, Direction, Trade, TradeInput } from '../lib/types';
 import { errorMessage, useToast } from '../components/Toast';
 import { PendingShotThumb, ScreenshotDropzone, ShotThumb } from '../components/Screenshots';
-import {
-  Button,
-  Card,
-  Chip,
-  EmptyState,
-  Field,
-  Input,
-  Loading,
-  PageHeader,
-  Select,
-  SectionTitle,
-  Textarea,
-  buttonStyles,
-  cn,
-} from '../components/ui';
+import { Button, Card, Chip, EmptyState, Field, Input, Loading, PageHeader, Select, SectionTitle, Textarea, buttonStyles, cn, PnlAmount } from '../components/ui';
 
 const numOrNull = (v: string): number | null => {
   const s = v.replace(',', '.').trim();
@@ -375,7 +361,7 @@ function TradeForm({
                     onClick={() => set('direction', d)}
                     aria-pressed={form.direction === d}
                     className={cn(
-                      'h-11 rounded-xl border text-sm font-medium transition-all duration-200 ease-out-expo active:scale-[0.98] md:h-10',
+                      'min-h-11 whitespace-normal rounded-xl border px-2 text-center text-sm font-medium leading-tight transition-all duration-200 ease-out-expo active:scale-[0.98] md:min-h-10',
                       form.direction === d
                         ? d === 'long'
                           ? 'border-gain/40 bg-gain/10 text-gain'
@@ -389,10 +375,10 @@ function TradeForm({
               </div>
             </ChipGroup>
             <Field label="Ouverture *" hint="Heure locale de ton navigateur.">
-              <Input type="datetime-local" value={form.opened_local} onChange={(e) => set('opened_local', e.target.value)} />
+              <Input type="datetime-local" lang="fr-FR" value={form.opened_local} onChange={(e) => set('opened_local', e.target.value)} />
             </Field>
             <Field label="Clôture" hint="Laisse vide si la position est encore ouverte (non prise en compte).">
-              <Input type="datetime-local" value={form.closed_local} onChange={(e) => set('closed_local', e.target.value)} />
+              <Input type="datetime-local" lang="fr-FR" value={form.closed_local} onChange={(e) => set('closed_local', e.target.value)} />
             </Field>
             <Field label="Taille (lots / contrats)">
               <Input inputMode="decimal" value={form.size} onChange={(e) => set('size', e.target.value)} placeholder="1" />
@@ -575,7 +561,7 @@ function TradeForm({
           </p>
         )}
 
-        <div className="sticky bottom-20 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line-2 bg-surface/95 p-3 shadow-card backdrop-blur-xl md:bottom-4">
+        <div className="sticky bottom-20 z-10 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line-2 bg-surface/95 p-2.5 shadow-card backdrop-blur-xl md:bottom-4 md:gap-3 md:p-3">
           {trade ? (
             <Button
               variant="ghost"
@@ -591,6 +577,12 @@ function TradeForm({
           ) : (
             <span />
           )}
+          <div className="flex items-baseline gap-2 text-xs md:gap-3 md:text-sm" aria-label="Résumé en direct">
+            <span className="text-muted">Net</span>
+            <PnlAmount value={netPreview} currency={currency} className="font-semibold" />
+            <span className="text-muted">R</span>
+            <span className="tabular-nums text-fg-2">{formatR(rPreview)}</span>
+          </div>
           <div className="flex gap-2">
             <Link to="/trades" className={buttonStyles('ghost')}>
               Annuler

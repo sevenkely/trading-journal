@@ -443,3 +443,84 @@ describe('détail d’un trade depuis la page Trades', () => {
     expect(el.querySelector('input[type="file"]')).toBeNull();
   });
 });
+
+describe('tableau des trades : URL, tri et ajout rapide', () => {
+  function setField(field: HTMLInputElement, value: string) {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    setter?.call(field, value);
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function sheet(): HTMLElement | null {
+    return document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
+  }
+
+  function buttonIn(scope: ParentNode, text: string): HTMLButtonElement | undefined {
+    return [...scope.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === text);
+  }
+
+  it('applique les filtres de l’URL et les chips reflètent l’état', async () => {
+    await seed();
+    const el = await mountAt('/trades?side=short', 'NQ');
+    expect(buttonIn(el, 'Vente')?.getAttribute('aria-pressed')).toBe('true');
+    expect(buttonIn(el, 'Achat')?.getAttribute('aria-pressed')).toBe('false');
+    expect(el.textContent).not.toContain('EURUSD');
+  });
+
+  it('trie par colonne avec aria-sort', async () => {
+    await seed();
+    const el = await mountAt('/trades', 'EURUSD');
+    const thead = el.querySelector('thead');
+    expect(thead).not.toBeNull();
+    await act(async () => {
+      buttonIn(thead as HTMLElement, 'P&L net')?.click();
+    });
+    await settle();
+    expect(el.querySelector('th[aria-sort="descending"]')?.textContent).toContain('P&L net');
+    await act(async () => {
+      buttonIn(thead as HTMLElement, 'P&L net')?.click();
+    });
+    await settle();
+    expect(el.querySelector('th[aria-sort="ascending"]')?.textContent).toContain('P&L net');
+  });
+
+  it('valide puis ajoute un trade depuis « Ajout rapide », Échap ferme la fenêtre', async () => {
+    await seed();
+    const el = await mountAt('/trades', 'EURUSD');
+    await act(async () => {
+      buttonIn(el, 'Ajout rapide')?.click();
+    });
+    await settle();
+    expect(sheet()?.textContent).toContain('Ajout rapide');
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    await settle();
+    expect(sheet()).toBeNull();
+
+    await act(async () => {
+      buttonIn(el, 'Ajout rapide')?.click();
+    });
+    await settle();
+    const dialog = sheet() as HTMLElement;
+    await act(async () => {
+      buttonIn(dialog, 'Ajouter')?.click();
+    });
+    await settle();
+    expect(sheet()?.textContent).toContain('Indique l’instrument');
+
+    await act(async () => {
+      setField(dialog.querySelector<HTMLInputElement>('input[placeholder="EURUSD, NQ, XAUUSD…"]') as HTMLInputElement, 'gbpusd');
+    });
+    await act(async () => {
+      setField(dialog.querySelector<HTMLInputElement>('input[placeholder="ex. 150 ou -80"]') as HTMLInputElement, '50');
+    });
+    await act(async () => {
+      buttonIn(dialog, 'Ajouter')?.click();
+    });
+    await settle();
+    expect(sheet()).toBeNull();
+    expect(document.body.textContent).toContain('GBPUSD');
+    expect(document.body.textContent).toContain('Trade ajouté');
+  });
+});

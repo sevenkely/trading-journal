@@ -191,4 +191,19 @@ describe('accessibilité : axe-core, WCAG 2.2 niveaux A et AA', () => {
     expect(dialog).not.toBeNull();
     expect(await auditViolations(dialog ?? host)).toEqual([]);
   }, 60_000);
+
+  it('aucune violation avec la bottom sheet « Ajout rapide » ouverte', async () => {
+    await seed();
+    const host = await mountAt('/trades', 'EURUSD');
+    const trigger = [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Ajout rapide');
+    expect(trigger).toBeDefined();
+    await act(async () => {
+      trigger?.click();
+    });
+    await settle();
+    // La feuille est rendue dans <body> (portail) : on audite le dialogue lui-même
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
+    expect(dialog).not.toBeNull();
+    expect(await auditViolations(dialog ?? host)).toEqual([]);
+  }, 60_000);
 });
