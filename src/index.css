@@ -1,0 +1,288 @@
+@import "tailwindcss";
+
+/*
+ * Système de design « salle de marché nocturne » :
+ * fond encre, surfaces sobres, un seul accent ambre, chiffres tabulaires,
+ * titres en serif. Toutes les valeurs passent par ces tokens.
+ */
+@theme {
+  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", "Instrument Sans Variable", ui-serif, Georgia, serif;
+
+  --color-ink: #06080c;
+  --color-panel: #080b11;
+  --color-surface: #0d1118;
+  --color-surface-2: #121823;
+  --color-surface-3: #1a2230;
+  --color-line: #161d2a;
+  --color-line-2: #243043;
+  --color-fg: #eef2f8;
+  --color-fg-2: #b9c2d0;
+  --color-muted: #8491a4;
+  --color-accent: #f2b84b;
+  --color-accent-hi: #ffd27a;
+  --color-accent-ink: #140e02;
+  --color-gain: #3ddc97;
+  --color-loss: #ff6b7a;
+  --color-danger: #ff9362;
+  --color-info: #7fb6ff;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 30px 60px -40px rgb(0 0 0 / 0.9);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background: var(--color-ink);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--color-fg);
+  background-color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+}
+
+/* Palette daltonienne (réglage Paramètres) : bleu et orange au lieu de vert et rouge */
+:root[data-palette='daltonien'] {
+  --color-gain: #56b4e9;
+  --color-loss: #e8743b;
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-2) transparent;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='datetime-local']::-webkit-calendar-picker-indicator {
+  filter: invert(0.75);
+  cursor: pointer;
+}
+
+/* Halo d'ambre discret en haut de page */
+.app-glow {
+  background-image:
+    radial-gradient(900px 520px at 0% -12%, color-mix(in oklab, var(--color-accent) 11%, transparent), transparent 65%),
+    radial-gradient(800px 480px at 100% 0%, color-mix(in oklab, var(--color-gain) 5%, transparent), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* Trame de graphique, qui s'estompe vers le bas */
+.app-grid::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.03) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 75% 60% at 50% 0%, #000 20%, transparent 80%);
+  mask-image: radial-gradient(ellipse 75% 60% at 50% 0%, #000 20%, transparent 80%);
+}
+
+/* Carte dont la lumière suit le curseur (réponse directe à l'action de l'utilisateur) */
+.spot {
+  position: relative;
+  isolation: isolate;
+}
+
+.spot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    380px circle at var(--mx, 50%) var(--my, 0%),
+    color-mix(in oklab, var(--color-accent) 12%, transparent),
+    transparent 70%
+  );
+  transition: opacity 500ms var(--ease-out-expo);
+}
+
+.spot:hover::before {
+  opacity: 1;
+}
+
+/* Squelette de chargement */
+@keyframes shimmer {
+  from {
+    background-position: 150% 0, 0 0;
+  }
+  to {
+    background-position: -150% 0, 0 0;
+  }
+}
+
+.skeleton {
+  border-radius: 1rem;
+  background:
+    linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.05) 45%, transparent 70%),
+    var(--color-surface-2);
+  background-size: 250% 100%, auto;
+  animation: shimmer 1.7s linear infinite;
+}
+
+/* Flottement doux de l'icône des états vides */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Lueur ambrée sous les graphiques */
+.chart-glow {
+  filter: drop-shadow(0 16px 24px color-mix(in oklab, var(--color-accent) 16%, transparent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ———————————————————————————————————————————————————————————
+   Impression (bilan hebdomadaire et autres pages) : fond blanc,
+   navigation et boutons masqués, couleurs lisibles sur papier.
+   ——————————————————————————————————————————————————————————— */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  .app-glow,
+  .app-grid,
+  .spot {
+    background-image: none !important;
+    background-color: transparent !important;
+  }
+
+  .print-flat {
+    padding-left: 0 !important;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  [class*='bg-surface'],
+  [class*='bg-panel'],
+  [class*='bg-ink'] {
+    background-color: #ffffff !important;
+  }
+
+  .bg-line {
+    background-color: #d1d5db !important;
+  }
+
+  [class*='border-'] {
+    border-color: #d1d5db !important;
+  }
+
+  .text-fg,
+  .text-fg-2 {
+    color: #111827 !important;
+  }
+
+  .text-muted {
+    color: #4b5563 !important;
+  }
+
+  .text-accent,
+  .text-accent-hi {
+    color: #92400e !important;
+  }
+
+  .text-gain {
+    color: #047857 !important;
+  }
+
+  .text-loss {
+    color: #be123c !important;
+  }
+
+  /* Palette bleu / orange : versions plus foncées pour rester lisibles sur papier */
+  html[data-palette='daltonien'] .text-gain {
+    color: #0072b2 !important;
+  }
+
+  html[data-palette='daltonien'] .text-loss {
+    color: #b35300 !important;
+  }
+
+  .shadow-card,
+  .chart-glow {
+    box-shadow: none !important;
+    filter: none !important;
+  }
+
+  .rounded-2xl,
+  .rounded-xl {
+    break-inside: avoid;
+  }
+
+  [class*='divide-'] > * {
+    border-color: #d1d5db !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
