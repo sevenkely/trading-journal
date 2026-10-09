@@ -1,13 +1,13 @@
 import type { Account } from '../lib/types';
 import type { Gauge, Level, RuleReport } from '../lib/rules';
 import { formatMoney, formatNumber, formatPercent } from '../lib/format';
-import { Badge, Card, ProgressBar, PnlAmount, type Tone } from './ui';
+import { Badge, Card, ProgressBar, PnlAmount, cn, type Tone } from './ui';
 
-export const LEVEL_UI: Record<Level, { label: string; tone: Tone; bar: string }> = {
-  ok: { label: 'Dans les règles', tone: 'good', bar: 'bg-gain' },
-  warning: { label: 'Attention', tone: 'warn', bar: 'bg-accent' },
-  danger: { label: 'Danger', tone: 'hot', bar: 'bg-danger' },
-  breached: { label: 'Règle enfreinte', tone: 'bad', bar: 'bg-loss' },
+export const LEVEL_UI: Record<Level, { label: string; tone: Tone; bar: string; text: string }> = {
+  ok: { label: 'Dans les règles', tone: 'good', bar: 'bg-gain', text: 'text-gain' },
+  warning: { label: 'Attention', tone: 'warn', bar: 'bg-accent', text: 'text-accent-hi' },
+  danger: { label: 'Danger', tone: 'hot', bar: 'bg-danger', text: 'text-danger' },
+  breached: { label: 'Règle enfreinte', tone: 'bad', bar: 'bg-loss', text: 'text-loss' },
 };
 
 const KIND_LABEL: Record<Account['kind'], string> = {
@@ -38,17 +38,39 @@ function remainingText(g: Gauge, currency: string): string {
   return g.remaining > 0 ? `marge ${amount(g, g.remaining, currency)}` : `dépassé de ${amount(g, -g.remaining, currency)}`;
 }
 
-/** Une règle avec sa jauge animée, son niveau et la marge restante. */
+/** Libellé d’une jauge : les limites de perte portent le nom que lit le trader (marge avant la limite). */
+function gaugeLabel(g: Gauge): string {
+  if (g.key === 'maxLoss') return 'Marge avant drawdown limite';
+  if (g.key === 'daily') return 'Marge avant perte journalière';
+  return g.label;
+}
+
+/**
+ * Une règle avec sa jauge animée, son niveau et la marge restante en $.
+ * En zone de danger ou enfreinte, la barre pulse doucement (opacité seule).
+ */
 export function GaugeRow({ gauge, currency }: { gauge: Gauge; currency: string }) {
   const ui = LEVEL_UI[gauge.level];
-  const details = [limitText(gauge, currency), remainingText(gauge, currency)].filter(Boolean).join(' · ');
+  const isRisk = gauge.kind === 'risk';
+  const danger = isRisk && (gauge.level === 'danger' || gauge.level === 'breached');
+  const headline =
+    isRisk && gauge.remaining !== null
+      ? gauge.remaining >= 0
+        ? `${amount(gauge, gauge.remaining, currency)} de marge`
+        : `dépassé de ${amount(gauge, -gauge.remaining, currency)}`
+      : amount(gauge, gauge.value, currency);
+  const details = isRisk
+    ? `utilisé ${amount(gauge, gauge.value, currency)} · ${limitText(gauge, currency)}`
+    : [limitText(gauge, currency), remainingText(gauge, currency)].filter(Boolean).join(' · ');
   return (
     <div className="space-y-2.5">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="min-w-0 text-[13px] text-fg-2">{gauge.label}</span>
-        <span className="shrink-0 text-[13px] font-semibold tabular-nums text-fg">{amount(gauge, gauge.value, currency)}</span>
+        <span className="min-w-0 text-[13px] text-fg-2">{gaugeLabel(gauge)}</span>
+        <span className={cn('shrink-0 text-[13px] font-semibold tabular-nums', isRisk && gauge.level !== 'ok' ? ui.text : 'text-fg')}>
+          {headline}
+        </span>
       </div>
-      <ProgressBar ratio={gauge.ratio} className={gauge.kind === 'progress' ? 'bg-info' : ui.bar} />
+      <ProgressBar ratio={gauge.ratio} className={gauge.kind === 'progress' ? 'bg-info' : ui.bar} pulse={danger} />
       {details && <div className="text-xs leading-relaxed text-muted">{details}</div>}
     </div>
   );

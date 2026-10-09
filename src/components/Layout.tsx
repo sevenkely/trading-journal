@@ -225,8 +225,8 @@ export default function Layout() {
               key={location.pathname}
               initial={reduce ? false : { opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={reduce ? { opacity: 1 } : { opacity: 0, y: -6 }}
-              transition={{ duration: 0.3, ease: EASE }}
+              exit={reduce ? { opacity: 1 } : { opacity: 0, y: -6, transition: { duration: 0.2, ease: EASE } }}
+              transition={{ duration: 0.24, ease: EASE }}
             >
               <Suspense fallback={<Loading />}>{outlet}</Suspense>
             </motion.div>

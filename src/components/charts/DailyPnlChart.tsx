@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Bar, Cell, ComposedChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { useReducedMotion } from 'motion/react';
-import { mean, type DayBar } from '../../lib/chartData';
+import { daysInPeriod, mean, PERIODS, type DayBar, type Period } from '../../lib/chartData';
 import { formatMoney, formatNumber } from '../../lib/format';
 import { usePalette } from '../PaletteContext';
+import { Segmented } from '../ui';
 import { ChartFrame, ChartTable, EmptyChart, TooltipCard, TooltipRow } from './ChartFrame';
 import { AXIS_TICK, CURSOR_STROKE, GRID_STROKE } from './shared';
 
@@ -26,14 +27,20 @@ function DayTooltip({ active, payload, currency }: { active?: boolean; payload?:
 }
 
 /** P&L net par jour de trading, avec la moyenne journalière en pointillés. */
-export function DailyPnlChart({ bars, currency, title = 'P&L par jour', description = 'Chaque barre est une journée de trading.' }: DailyPnlChartProps) {
+export function DailyPnlChart({ bars: allBars, currency, title = 'P&L par jour', description = 'Chaque barre est une journée de trading.' }: DailyPnlChartProps) {
   const { gainRgb, lossRgb } = usePalette();
   const reduce = useReducedMotion();
+  const [period, setPeriod] = useState<Period>('30j');
+  const bars = useMemo(() => daysInPeriod(allBars, period), [allBars, period]);
   const average = useMemo(() => mean(bars.map((b) => b.pnl)), [bars]);
+
+  const periodControl = (
+    <Segmented id="daily-period" label="Période du P&L par jour" options={PERIODS} value={period} onChange={setPeriod} />
+  );
 
   if (bars.length === 0) {
     return (
-      <ChartFrame title={title} description={description}>
+      <ChartFrame title={title} description={description} actions={periodControl}>
         <EmptyChart>Aucune journée de trading sur cette période.</EmptyChart>
       </ChartFrame>
     );
@@ -45,6 +52,7 @@ export function DailyPnlChart({ bars, currency, title = 'P&L par jour', descript
     <ChartFrame
       title={title}
       description={`${description} ${winningDays} jour(s) gagnant(s) sur ${bars.length}.`}
+      actions={periodControl}
     >
       <div role="img" aria-label={`P&L par jour : ${bars.length} jours, moyenne ${formatMoney(average ?? 0, currency, true)} par jour`} className="h-56 md:h-64">
         <ResponsiveContainer width="100%" height="100%">
@@ -64,7 +72,7 @@ export function DailyPnlChart({ bars, currency, title = 'P&L par jour', descript
                 y={average}
                 stroke="#e6ebf3"
                 strokeDasharray="4 4"
-                label={{ value: `Moyenne ${formatMoney(average, currency, true)}`, position: 'insideTopRight', fill: '#c3cbd8', fontSize: 11 }}
+                label={{ value: `Moyenne ${formatMoney(average, currency, true)}`, position: 'insideTopRight', fill: '#e6ebf3', fontSize: 11, stroke: '#0d1118', strokeWidth: 3, paintOrder: 'stroke' }}
               />
             )}
           </ComposedChart>

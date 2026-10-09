@@ -42,6 +42,11 @@ function EquityTooltip({ active, payload, currency }: { active?: boolean; payloa
  * Courbe d’équité (dégradé, solde initial, seuil de drawdown et objectif), barre de zoom (brush),
  * périodes et drawdown réalisé. Le drawdown suit le même zoom que la courbe.
  */
+/** Libellé d’un extrême : à gauche du point quand il est près du bord droit, pour ne pas être coupé. */
+function markerPosition(index: number, length: number, vertical: 'top' | 'bottom'): 'left' | 'top' | 'bottom' {
+  return length > 1 && index / (length - 1) > 0.7 ? 'left' : vertical;
+}
+
 export function EquityPanel({ trades, startingBalance, currency, rule }: EquityPanelProps) {
   const reduce = useReducedMotion();
   const gradientId = `equity-fill-${useId().replace(/:/g, '')}`;
@@ -142,7 +147,7 @@ export function EquityPanel({ trades, startingBalance, currency, rule }: EquityP
                   fill={EQUITY_COLOR}
                   stroke="#0d1118"
                   strokeWidth={2}
-                  label={{ value: `Max ${formatNumber(extremes.high.equity, 0)}`, position: 'top', fill: '#eef2f8', fontSize: 11 }}
+                  label={{ value: `Max ${formatNumber(extremes.high.equity, 0)}`, position: markerPosition(extremes.high.index, focus.length, 'top'), fill: '#eef2f8', fontSize: 11 }}
                 />
                 <ReferenceDot
                   x={focus[extremes.low.index].n}
@@ -151,7 +156,7 @@ export function EquityPanel({ trades, startingBalance, currency, rule }: EquityP
                   fill={LIMIT_COLOR}
                   stroke="#0d1118"
                   strokeWidth={2}
-                  label={{ value: `Min ${formatNumber(extremes.low.equity, 0)}`, position: 'bottom', fill: '#eef2f8', fontSize: 11 }}
+                  label={{ value: `Min ${formatNumber(extremes.low.equity, 0)}`, position: markerPosition(extremes.low.index, focus.length, 'bottom'), fill: '#eef2f8', fontSize: 11 }}
                 />
               </>
             )}

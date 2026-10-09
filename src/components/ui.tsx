@@ -228,16 +228,19 @@ export function ProgressBar({
   className,
   track = 'w-full',
   delay = 0,
+  pulse = false,
 }: {
   ratio: number;
   className: string;
   track?: string;
   delay?: number;
+  /** Pulsation lente de la barre (zone de danger) : opacité seule, coupée par « réduire les mouvements ». */
+  pulse?: boolean;
 }) {
   return (
     <div className={cn('h-1.5 overflow-hidden rounded-full bg-surface-3', track)}>
       <motion.div
-        className={cn('h-full w-full origin-left rounded-full', className)}
+        className={cn('h-full w-full origin-left rounded-full', className, pulse && 'pulse-soft')}
         initial={{ scaleX: 0 }}
         animate={{ scaleX: clamp01(ratio) }}
         transition={{ duration: 0.9, ease: EASE, delay }}

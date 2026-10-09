@@ -183,8 +183,8 @@ describe('application en mode démo', () => {
     expect(el.textContent).toContain('Taux de réussite');
     expect(el.textContent).toContain('Courbe d’équité');
     expect(el.textContent).toContain('FTMO Test');
-    expect(el.textContent).toContain('Meilleur trade');
-    expect(el.textContent).toContain('Drawdown max');
+    expect(el.textContent).toContain('Meilleur jour');
+    expect(el.textContent).toContain('Drawdown réalisé (historique)');
     expect(el.textContent).toContain('Règle de cohérence dépassée');
   });
 
