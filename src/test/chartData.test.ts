@@ -8,17 +8,14 @@ import {
   isThinCell,
   mean,
   median,
-  monthGrid,
   outcomeSplit,
   periodStart,
   rDistribution,
   rMultiples,
-  shiftMonth,
   sliceCurve,
   targetLevel,
   worstDrawdownPct,
 } from '../lib/chartData';
-import type { DayCell } from '../lib/metrics';
 import type { Trade } from '../lib/types';
 
 /** Trade minimal : seuls les champs lus par les calculs sont renseignés. */
@@ -158,31 +155,6 @@ describe('P&L par jour', () => {
     expect(median([5, 1, 3])).toBe(3);
     expect(median([4, 1, 3, 2])).toBe(2.5);
     expect(median([])).toBeNull();
-  });
-});
-
-describe('calendrier mensuel', () => {
-  it('aligne le 1er sur le bon jour (lundi en premier) et complète les semaines', () => {
-    // 1er mars 2026 : dimanche → 6 cases vides avant
-    const grid = monthGrid('2026-03', new Map());
-    expect(grid[0].slice(0, 6)).toEqual([null, null, null, null, null, null]);
-    expect(grid[0][6]?.date).toBe('2026-03-01');
-    expect(grid.every((week) => week.length === 7)).toBe(true);
-    const days = grid.flat().filter((c) => c !== null);
-    expect(days).toHaveLength(31);
-  });
-
-  it('reporte le P&L et le nombre de trades par jour', () => {
-    const daily = new Map<string, DayCell>([['2026-02-02', { pnl: -40, count: 2 }]]);
-    const grid = monthGrid('2026-02', daily);
-    const cell = grid.flat().find((c) => c?.date === '2026-02-02');
-    expect(cell).toEqual({ date: '2026-02-02', day: 2, pnl: -40, count: 2 });
-  });
-
-  it('décale les mois, y compris au changement d’année', () => {
-    expect(shiftMonth('2026-01', -1)).toBe('2025-12');
-    expect(shiftMonth('2026-12', 1)).toBe('2027-01');
-    expect(shiftMonth('2026-03', 2)).toBe('2026-05');
   });
 });
 

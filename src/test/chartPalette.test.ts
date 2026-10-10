@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
 import { chartPalette } from '../components/charts/shared';
+import { PALETTE_NAMES, paletteRgb } from '../lib/palette';
 
 /** Luminance relative WCAG d’une couleur #rrggbb. */
 function luminance(hex: string): number {
@@ -14,6 +15,14 @@ function luminance(hex: string): number {
 function contrast(a: string, b: string): number {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
+}
+
+/** Triplet RVB « 10 125 67 » vers #rrggbb, pour réutiliser le calcul de contraste. */
+function toHex(triplet: string): string {
+  return `#${triplet
+    .split(' ')
+    .map((part) => Number(part).toString(16).padStart(2, '0'))
+    .join('')}`;
 }
 
 afterEach(() => {
@@ -41,5 +50,20 @@ describe('palette des graphiques', () => {
     const p = chartPalette();
     expect(contrast(p.axis, p.surface)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(p.text, p.surface)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('thème clair : gains et pertes lisibles sur blanc, dans les deux palettes', () => {
+    for (const name of PALETTE_NAMES) {
+      const rgb = paletteRgb(name, true);
+      expect(contrast(toHex(rgb.gain), '#ffffff')).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(toHex(rgb.loss), '#ffffff')).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('les teintes de gain et de perte changent entre thème sombre et thème clair', () => {
+    for (const name of PALETTE_NAMES) {
+      expect(paletteRgb(name, true).gain).not.toBe(paletteRgb(name, false).gain);
+      expect(paletteRgb(name, true).loss).not.toBe(paletteRgb(name, false).loss);
+    }
   });
 });

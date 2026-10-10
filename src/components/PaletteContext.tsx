@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { PALETTES, readPalette, writePalette, type PaletteName } from '../lib/palette';
+import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { isLightTheme, paletteRgb, readPalette, writePalette, type PaletteName } from '../lib/palette';
 
 export interface PaletteValue {
   name: PaletteName;
@@ -11,8 +11,8 @@ export interface PaletteValue {
 
 const DEFAULT_VALUE: PaletteValue = {
   name: 'classique',
-  gainRgb: PALETTES.classique.gain,
-  lossRgb: PALETTES.classique.loss,
+  gainRgb: paletteRgb('classique', false).gain,
+  lossRgb: paletteRgb('classique', false).loss,
   setName: () => undefined,
 };
 
@@ -26,6 +26,20 @@ function localStorageOrNull(): Storage | null {
   }
 }
 
+/**
+ * Le thème n’est pas un état React : il vit dans l’attribut data-theme de <html> (voir display.ts),
+ * posé par les paramètres ou par le script du chargement. On s’y abonne pour que les teintes des
+ * graphiques suivent immédiatement — sans quoi elles garderaient celles du thème précédent.
+ */
+function subscribeTheme(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  return () => observer.disconnect();
+}
+
+const readTheme = (): string => (isLightTheme() ? 'light' : 'dark');
+const serverTheme = (): string => 'dark';
+
 /** Fournit la palette à toute l’app et l’applique via l’attribut data-palette de <html> (variables CSS). */
 export function PaletteProvider({ children }: { children: ReactNode }) {
   const [name, setName] = useState<PaletteName>(() => readPalette(localStorageOrNull()));
@@ -35,10 +49,12 @@ export function PaletteProvider({ children }: { children: ReactNode }) {
     writePalette(name, localStorageOrNull());
   }, [name]);
 
-  const value = useMemo<PaletteValue>(
-    () => ({ name, gainRgb: PALETTES[name].gain, lossRgb: PALETTES[name].loss, setName }),
-    [name],
-  );
+  // Les teintes suivent le thème : les mêmes triplets servent aux graphiques Recharts et aux barres dessinées à la main
+  const theme = useSyncExternalStore(subscribeTheme, readTheme, serverTheme);
+  const value = useMemo<PaletteValue>(() => {
+    const rgb = paletteRgb(name, theme === 'light');
+    return { name, gainRgb: rgb.gain, lossRgb: rgb.loss, setName };
+  }, [name, theme]);
   return <PaletteContext.Provider value={value}>{children}</PaletteContext.Provider>;
 }
 

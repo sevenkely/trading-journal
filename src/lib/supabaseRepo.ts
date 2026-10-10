@@ -154,22 +154,27 @@ export function createSupabaseRepo(sb: SupabaseClient, userId: string): Repo {
       await removeScreenshotFiles(sb, paths);
     },
 
-    async listTrades() {
+    async listTrades(options) {
+      const limit = options?.limit && options.limit > 0 ? options.limit : null;
+      // Avec une limite, on part des plus récents ; l'ordre croissant est rétabli en sortie.
+      const ascending = limit === null;
       const out: Trade[] = [];
       for (let from = 0; ; from += PAGE_SIZE) {
+        const size = limit === null ? PAGE_SIZE : Math.min(PAGE_SIZE, limit - out.length);
+        if (size <= 0) break;
         const { data, error } = await sb
           .from('trades')
           .select('*')
           .eq('user_id', userId)
-          .order('opened_at', { ascending: true })
-          .order('id', { ascending: true })
-          .range(from, from + PAGE_SIZE - 1);
+          .order('opened_at', { ascending })
+          .order('id', { ascending })
+          .range(from, from + size - 1);
         check(error);
         const rows = data ?? [];
         out.push(...rows.map((row) => toTrade(row)));
-        if (rows.length < PAGE_SIZE) break;
+        if (rows.length < size) break;
       }
-      return out;
+      return limit === null ? out : out.reverse();
     },
 
     async createTrade(input: TradeInput, extra?: { id?: string; screenshots?: string[] }) {

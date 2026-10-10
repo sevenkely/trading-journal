@@ -157,3 +157,25 @@ describe('colonnes et vues', () => {
     expect(removeView(views, views[0].id)).toHaveLength(MAX_VIEWS - 1);
   });
 });
+
+describe('filtre par statut (positions ouvertes)', () => {
+  const trades = [
+    makeTrade({ id: 'closed', closed_at: '2026-10-05T09:00:00.000Z' }),
+    makeTrade({ id: 'open', closed_at: null }),
+  ];
+
+  it('garde les positions ouvertes ou clôturées selon le filtre', () => {
+    const open = filterTrades(trades, { ...DEFAULT_QUERY, state: 'open' }, 'UTC');
+    expect(ids(open)).toEqual(['open']);
+    const closed = filterTrades(trades, { ...DEFAULT_QUERY, state: 'closed' }, 'UTC');
+    expect(ids(closed)).toEqual(['closed']);
+    expect(filterTrades(trades, DEFAULT_QUERY, 'UTC')).toHaveLength(2);
+  });
+
+  it('lit et écrit le statut dans l’URL', () => {
+    expect(parseTradeQuery(new URLSearchParams('state=open')).state).toBe('open');
+    expect(parseTradeQuery(new URLSearchParams('state=inconnu')).state).toBe('all');
+    expect(writeTradeQuery(new URLSearchParams(), { ...DEFAULT_QUERY, state: 'closed' }).get('state')).toBe('closed');
+    expect(writeTradeQuery(new URLSearchParams(), DEFAULT_QUERY).get('state')).toBeNull();
+  });
+});

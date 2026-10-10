@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PALETTES, PALETTE_STORAGE_KEY, isPaletteName, readPalette, writePalette } from './palette';
+import { PALETTES, PALETTE_NAMES, PALETTE_STORAGE_KEY, isPaletteName, paletteRgb, readPalette, writePalette } from './palette';
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial));
@@ -32,5 +32,12 @@ describe('palette', () => {
     expect(isPaletteName('vert')).toBe(false);
     expect(PALETTES.daltonien.gain).not.toBe(PALETTES.classique.gain);
     expect(PALETTES.daltonien.loss).not.toBe(PALETTES.classique.loss);
+  });
+
+  it('sert les teintes du thème demandé, sans dépendre du thème courant', () => {
+    for (const name of PALETTE_NAMES) {
+      expect(paletteRgb(name, false)).toEqual({ gain: PALETTES[name].gain, loss: PALETTES[name].loss });
+      expect(paletteRgb(name, true)).toEqual({ gain: PALETTES[name].gainLight, loss: PALETTES[name].lossLight });
+    }
   });
 });

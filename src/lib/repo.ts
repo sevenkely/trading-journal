@@ -15,6 +15,11 @@ import type {
  * - createSupabaseRepo : base Supabase (multi-utilisateur, sécurisée par RLS)
  * - createLocalRepo : mode démo dans le navigateur (localStorage)
  */
+export interface ListTradesOptions {
+  /** Nombre maximum de trades renvoyés, en partant des plus récents */
+  limit?: number;
+}
+
 export interface Repo {
   readonly supportsScreenshots: boolean;
 
@@ -26,7 +31,11 @@ export interface Repo {
   updateAccount(id: string, patch: Partial<AccountInput>): Promise<Account>;
   deleteAccount(id: string): Promise<void>;
 
-  listTrades(): Promise<Trade[]>;
+  /**
+   * `options.limit` : ne charge que les trades les plus récents (les pages d'agrégat, elles,
+   * ont besoin de tout l'historique pour leurs statistiques).
+   */
+  listTrades(options?: ListTradesOptions): Promise<Trade[]>;
   /**
    * `extra.id` : identifiant choisi à l'avance (les captures sont envoyées avant le trade, dans son dossier).
    * `extra.screenshots` : chemins des captures déjà envoyées.

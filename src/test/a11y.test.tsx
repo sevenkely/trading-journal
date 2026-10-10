@@ -89,8 +89,11 @@ async function mountAt(path: string, expected: string): Promise<HTMLDivElement> 
   return host;
 }
 
-/** Jeu de données de démo : un compte, deux trades (même jeu que le test de fumée). */
-async function seed() {
+/**
+ * Jeu de données de démo : un compte, deux trades clôturés (même jeu que le test de fumée).
+ * `withOpen` ajoute une position ouverte, dont le P&L est flottant.
+ */
+async function seed(withOpen = false) {
   const repo = createLocalRepo();
   const account = await repo.createAccount(
     accountInput({
@@ -130,6 +133,18 @@ async function seed() {
       emotions_before: ['Doute'],
       mistakes: ['Stop déplacé'],
     }),
+    ...(withOpen
+      ? [
+          tradeInput({
+            account_id: account.id,
+            instrument: 'GBPUSD',
+            gross_pnl: -250,
+            opened_at: '2026-10-09T12:00:00.000Z',
+            closed_at: null,
+            risk_amount: 200,
+          }),
+        ]
+      : []),
   ]);
 }
 
@@ -163,12 +178,21 @@ describe('accessibilité : axe-core, WCAG 2.2 niveaux A et AA', () => {
     ['/journal', 'Notes du jour'],
     ['/analyse', 'Répartition'],
     ['/bilan', 'Jour par jour'],
+    ['/bilan?periode=mois', 'Semaine par semaine'],
+    ['/bilan?periode=12m', 'Mois par mois'],
     ['/parametres', 'Couleurs des gains et des pertes'],
   ])('aucune violation sur %s', async (path, expected) => {
     await seed();
     const host = await mountAt(path, expected);
     const violations = await auditViolations(host);
     expect(violations).toEqual([]);
+  }, 60_000);
+
+  it('aucune violation avec une position ouverte (P&L flottant) sur le tableau de bord', async () => {
+    await seed(true);
+    const host = await mountAt('/', 'Positions ouvertes');
+    expect(host.textContent).toContain('P&L flottant');
+    expect(await auditViolations(host)).toEqual([]);
   }, 60_000);
 
   it('aucune violation sur la saisie d’un nouveau trade, captures comprises', async () => {

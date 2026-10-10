@@ -1,23 +1,44 @@
-import { useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { Plus, Wallet } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { useAccounts, useProfile, useRefresh, useRepo, useTrades } from '../data/hooks';
-import { CalendarHeatmap } from '../components/charts/CalendarHeatmap';
-import { ChartFrame } from '../components/charts/ChartFrame';
+import { useAccounts, useNotes, useProfile, useRefresh, useRepo, useTrades } from '../data/hooks';
+import { WeekStrip } from '../components/charts/WeekStrip';
 import { DailyPnlChart } from '../components/charts/DailyPnlChart';
 import { EquityPanel } from '../components/charts/EquityPanel';
 import { dailyBars, type DayBar } from '../lib/chartData';
-import { computeStats, dailyMap, sortByTradeTime } from '../lib/metrics';
+import { computeStats, dailyMap, floatingPnl, isOpen, sortByTradeTime, tradeTime } from '../lib/metrics';
+import { monthDays, shiftMonthKey } from '../lib/patterns';
 import { evaluateAccount, hasAnyRule, resolveAmount } from '../lib/rules';
-import { dayKey, formatDateTime, formatMoney, formatPercent, formatProfitFactor, formatR, signClass } from '../lib/format';
+import { capFirst, dayKey, formatDate, formatDateTime, formatMoney, formatPercent, formatProfitFactor, formatR, signClass } from '../lib/format';
 import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE } from '../lib/constants';
 import { loadDemoData } from '../lib/demoData';
+import type { AccountReport } from '../lib/alerts';
+import { useRuleAlerts } from '../components/useRuleAlerts';
 import { DashboardSkeleton } from '../components/Skeleton';
+import { OpenPositions } from '../components/OpenPositions';
+import { RuinPanel } from '../components/charts/RuinPanel';
+import { TodayPanel } from '../components/TodayPanel';
 import { LEVEL_UI, RuleCard } from '../components/RuleCard';
 import { errorMessage, useToast } from '../components/Toast';
 import { Badge, Button, Card, CountUp, EmptyState, PageHeader, ProgressBar, PnlAmount, Select, SectionTitle, buttonStyles, cn } from '../components/ui';
+
+/**
+ * Section du tableau de bord : un titre serif, une phrase, un filet. Le tableau de bord se lit
+ * de haut en bas — d’abord ce qui se passe maintenant, puis la performance, le risque, le rythme.
+ */
+function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  return (
+    <section className="mt-10">
+      <header className="mb-4 border-b border-line pb-3">
+        <h2 className="font-serif text-2xl leading-none text-fg">{title}</h2>
+        {description && <p className="mt-1.5 text-xs leading-relaxed text-muted">{description}</p>}
+      </header>
+      {children}
+    </section>
+  );
+}
 
 /** Tuile de la ligne KPI : le libellé se retourne sur deux lignes au lieu d’être tronqué (il reste lisible en entier). */
 function Kpi({ label, value, sub, valueClass }: { label: string; value: ReactNode; sub?: ReactNode; valueClass?: string }) {
@@ -32,16 +53,42 @@ function Kpi({ label, value, sub, valueClass }: { label: string; value: ReactNod
   );
 }
 
+/** Chiffre du bilan mensuel, sous la courbe : plus compact qu’une tuile KPI, sans cadre. */
+function MonthStat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[13px] leading-snug text-muted">{label}</div>
+      <div className="mt-1.5 whitespace-nowrap text-lg font-semibold tabular-nums tracking-tight text-fg">{value}</div>
+      {sub && <div className="mt-1 text-xs leading-snug text-muted">{sub}</div>}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { mode } = useAuth();
   const repo = useRepo();
   const refresh = useRefresh();
   const toast = useToast();
-  const navigate = useNavigate();
   const { data: accounts, isLoading: loadingAccounts } = useAccounts();
   const { data: trades, isLoading: loadingTrades } = useTrades();
   const { data: profile } = useProfile();
+  const { data: notes } = useNotes();
   const [scope, setScope] = useState('all');
+
+  // Alertes sortantes : tous les comptes à règles, même ceux masqués par le filtre affiché.
+  const alertEntries = useMemo<AccountReport[]>(() => {
+    const list = accounts ?? [];
+    const allTrades = trades ?? [];
+    return list
+      .filter((account) => account.status !== 'archived' && hasAnyRule(account))
+      .map((account) => ({
+        accountId: account.id,
+        accountName: account.name,
+        currency: account.currency,
+        report: evaluateAccount(account, allTrades.filter((t) => t.account_id === account.id)),
+      }));
+  }, [accounts, trades]);
+  useRuleAlerts(alertEntries, dayKey(new Date(), profile?.default_timezone ?? DEFAULT_TIMEZONE));
 
   const sample = useMutation({
     mutationFn: () => loadDemoData(repo),
@@ -100,13 +147,14 @@ export default function DashboardPage() {
   const startingBalance = scopeAccounts.reduce((sum, a) => sum + a.initial_balance, 0);
 
   const stats = computeStats(scopeTrades, tz);
+  const openCount = scopeTrades.filter(isOpen).length;
+  const floating = openCount > 0 ? floatingPnl(scopeTrades) : 0;
   const recent = sortByTradeTime(scopeTrades).slice(-6).reverse();
   const planTracked = scopeTrades.filter((t) => t.plan_respected !== null).length;
   const planYes = scopeTrades.filter((t) => t.plan_respected === true).length;
   const days = dailyBars(scopeTrades, tz);
   const daily = dailyMap(scopeTrades, tz);
   const bestDay = days.reduce<DayBar | null>((best, d) => (best === null || d.pnl > best.pnl ? d : best), null);
-  const lastDay = days.at(-1)?.date ?? dayKey(new Date(), tz);
   // Règles du compte seul : le seuil et l’objectif s’affichent sur la courbe (pas de règle sur un total multi-comptes)
   const rule = single
     ? {
@@ -126,6 +174,45 @@ export default function DashboardPage() {
   // Comptes dont une règle est au-delà du seuil « dans les règles » : affichés en tête de page
   const alerting = reports.filter(({ report }) => report.overall !== 'ok');
 
+  // Panneau du jour : réalisé du jour, flottant, limite journalière la plus serrée et checklist
+  const today = dayKey(new Date(), tz);
+  const closedToday = scopeTrades.filter((t) => !isOpen(t) && dayKey(tradeTime(t), tz) === today);
+  const pnlToday = closedToday.reduce((sum, t) => sum + t.net_pnl, 0);
+  const dailyGauges = reports
+    .map(({ report }) => report.gauges.find((g) => g.key === 'daily'))
+    .filter((g): g is NonNullable<typeof g> => g !== undefined);
+  const tightestDaily =
+    currencies.length === 1 && dailyGauges.length > 0
+      ? dailyGauges.reduce((tightest, gauge) => ((gauge.remaining ?? Infinity) < (tightest.remaining ?? Infinity) ? gauge : tightest))
+      : null;
+  const note = (notes ?? []).find((n) => n.date === today) ?? null;
+  const checklistDone = [...new Set(closedToday.flatMap((t) => t.checklist_done))];
+
+  // Bilan du mois en cours, du 1er à aujourd’hui : les jours à venir ne comptent pas comme « sans trade ».
+  // Le mois précédent sert de repère, comme sur la page Bilan.
+  const monthKey = today.slice(0, 7);
+  const month = monthDays(monthKey).filter((day) => day <= today);
+  const inMonth = new Set(month);
+  const monthTrades = scopeTrades.filter((t) => inMonth.has(dayKey(tradeTime(t), tz)));
+  const monthStats = computeStats(monthTrades, tz);
+  const monthDaily = dailyMap(monthTrades, tz);
+  const tradedDays = month.filter((day) => monthDaily.has(day));
+  const monthBest = tradedDays.reduce<{ day: string; pnl: number } | null>((best, day) => {
+    const pnl = monthDaily.get(day)?.pnl ?? 0;
+    return best === null || pnl > best.pnl ? { day, pnl } : best;
+  }, null);
+  const monthWorst = tradedDays.reduce<{ day: string; pnl: number } | null>((worst, day) => {
+    const pnl = monthDaily.get(day)?.pnl ?? 0;
+    return worst === null || pnl < worst.pnl ? { day, pnl } : worst;
+  }, null);
+  const previousMonth = shiftMonthKey(monthKey, -1);
+  const previousDays = new Set(monthDays(previousMonth));
+  const previousPnl = scopeTrades
+    .filter((t) => !isOpen(t) && previousDays.has(dayKey(tradeTime(t), tz)))
+    .reduce((sum, t) => sum + t.net_pnl, 0);
+  const monthLabel = capFirst(formatDate(`${monthKey}-01T12:00:00Z`, { month: 'long', year: 'numeric', timeZone: 'UTC' }));
+  const dayMonthLabel = (day: string) => capFirst(formatDate(`${day}T12:00:00Z`, { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }));
+
   return (
     <>
       <PageHeader
@@ -141,6 +228,21 @@ export default function DashboardPage() {
             ))}
           </Select>
         }
+      />
+
+      <TodayPanel
+        className="mb-6"
+        day={today}
+        tradesToday={closedToday.length}
+        pnlToday={pnlToday}
+        floating={floating}
+        openCount={openCount}
+        currency={currency}
+        daily={tightestDaily}
+        checklist={profile?.checklist ?? []}
+        checklistDone={checklistDone}
+        mood={note?.mood ?? null}
+        plan={note?.plan ?? null}
       />
 
       {currencies.length > 1 && (
@@ -176,140 +278,214 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {/* 1. Ligne KPI : chiffres clés en police sans, à chiffres tabulaires */}
-      <section
-        aria-label="Indicateurs clés"
-        className="stagger grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line shadow-card min-[768px]:grid-cols-3 min-[1400px]:grid-cols-6"
+      <Section
+        title="Performance"
+        description="Depuis le début du périmètre affiché. Les positions ouvertes n’entrent pas dans ces chiffres : seules leurs limites de risque les voient."
       >
-        <Kpi
-          label="P&L net"
-          value={
-            <CountUp
-              value={stats.netPnl}
-              format={(v) => formatMoney(v, currency, true)}
-              className={cn('block', stats.count > 0 ? signClass(stats.netPnl) : 'text-muted')}
-            />
-          }
-          sub={`Brut ${formatMoney(stats.grossPnl, currency, true)} · frais ${formatMoney(stats.fees, currency)}`}
-        />
-        <Kpi
-          label="Taux de réussite"
-          value={formatPercent(stats.winRate, 0)}
-          sub={`${stats.wins} gagnant(s) · ${stats.losses} perdant(s)`}
-        />
-        <Kpi label="Profit factor" value={formatProfitFactor(stats.profitFactor)} sub="Gains bruts ÷ pertes brutes" />
-        <Kpi
-          label="Espérance / trade"
-          value={<PnlAmount value={stats.expectancy} currency={currency} />}
-          sub={stats.avgR === null ? 'R : risque non renseigné' : `soit ${formatR(stats.avgR)} par trade`}
-        />
-        <Kpi
-          label="Drawdown réalisé (historique)"
-          value={formatMoney(stats.maxDrawdown, currency)}
-          valueClass={stats.maxDrawdown > 0 ? 'text-loss' : undefined}
-          sub="Plus forte baisse depuis le départ"
-        />
-        <Kpi
-          label="Meilleur jour"
-          value={bestDay ? <PnlAmount value={bestDay.pnl} currency={currency} /> : '—'}
-          sub={bestDay ? `${bestDay.label} · ${bestDay.count} trade(s)` : 'Aucune journée'}
-        />
-      </section>
-
-      {/* 2. Bloc principal : courbe d’équité et drawdown synchronisés ; à droite, respect du plan et derniers trades */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-12">
-        <div className="min-w-0 lg:col-span-8">
-          <EquityPanel key={scope} trades={scopeTrades} startingBalance={startingBalance} currency={currency} rule={rule} />
-        </div>
-
-        <div className="stagger flex min-w-0 flex-col gap-4 lg:col-span-4">
-          <Card className="p-5">
-            <div className="text-[13px] text-muted">Respect du plan</div>
-            <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <span className="text-3xl font-semibold tabular-nums tracking-tight text-fg">
-                {stats.planRespectedRate === null ? '—' : formatPercent(stats.planRespectedRate, 0)}
-              </span>
-              <span className="text-xs text-muted">des trades renseignés</span>
-            </div>
-            <ProgressBar ratio={(stats.planRespectedRate ?? 0) / 100} className="bg-accent" track="mt-4 w-full" />
-            <div className="mt-3 text-xs text-muted">
-              {planYes} trade(s) dans le plan sur {planTracked} renseigné(s)
-            </div>
-          </Card>
-
-          <Card className="flex-1 p-5">
-            <SectionTitle
-              title="Derniers trades"
-              action={
-                <Link to="/trades" className="text-xs font-medium text-accent transition-colors hover:text-accent-hi">
-                  Tout voir
-                </Link>
-              }
-            />
-            {recent.length === 0 ? (
-              <p className="text-sm text-muted">Aucun trade sur ce périmètre pour l’instant.</p>
-            ) : (
-              <ul className="-my-2 divide-y divide-line">
-                {recent.map((t) => {
-                  const account = accountById.get(t.account_id);
-                  return (
-                    <li key={t.id}>
-                      <Link
-                        to={`/trades/${t.id}`}
-                        className="-mx-2 flex items-center justify-between gap-3 rounded-xl px-2 py-3 transition-colors hover:bg-surface-2"
-                      >
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-2">
-                            <span className="font-medium text-fg">{t.instrument}</span>
-                            <Badge tone={t.direction === 'long' ? 'good' : 'bad'}>{t.direction === 'long' ? 'Achat' : 'Vente'}</Badge>
-                          </span>
-                          <span className="mt-0.5 block truncate text-xs text-muted">
-                            {formatDateTime(t.opened_at)} · {account?.name ?? '—'}
-                          </span>
-                        </span>
-                        <PnlAmount value={t.net_pnl} currency={account?.currency ?? DEFAULT_CURRENCY} className="shrink-0 font-semibold" />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Card>
-        </div>
-      </div>
-
-      {/* 3. Calendrier puis P&L par jour */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-12">
-        <div className="min-w-0 lg:col-span-5">
-          <ChartFrame title="Calendrier" description="Un jour = un jour de trading. Clique un jour pour voir ses trades.">
-            <CalendarHeatmap
-              key={scope}
-              daily={daily}
-              initialMonth={lastDay.slice(0, 7)}
-              currency={currency}
-              onSelectDay={(date) => navigate(`/trades?from=${date}&to=${date}`)}
-            />
-          </ChartFrame>
-        </div>
-        <div className="min-w-0 lg:col-span-7">
-          <DailyPnlChart key={`daily-${scope}`} bars={days} currency={currency} />
-        </div>
-      </div>
-
-      {/* 4. Règles prop firm : marge restante en $ */}
-      {reports.length > 0 && (
-        <section className="mt-8">
-          <SectionTitle
-            title="Règles & limites"
-            description="Perte journalière, drawdown, objectif et cohérence de tes comptes à règles."
+        {/* Ligne KPI : chiffres clés en police sans, à chiffres tabulaires */}
+        <section
+          aria-label="Indicateurs clés"
+          className="stagger grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line shadow-card min-[768px]:grid-cols-3 min-[1400px]:grid-cols-6"
+        >
+          <Kpi
+            label="P&L net"
+            value={
+              <CountUp
+                value={stats.netPnl}
+                format={(v) => formatMoney(v, currency, true)}
+                className={cn('block', stats.count > 0 ? signClass(stats.netPnl) : 'text-muted')}
+              />
+            }
+            sub={
+              <>
+                Brut {formatMoney(stats.grossPnl, currency, true)} · frais {formatMoney(stats.fees, currency)}
+                {openCount > 0 && (
+                  <>
+                    {' · flottant '}
+                    <PnlAmount value={floating} currency={currency} />
+                  </>
+                )}
+              </>
+            }
           />
-          <div className={cn('grid gap-4', reports.length > 1 && 'md:grid-cols-2')}>
-            {reports.map(({ account, report }) => (
-              <RuleCard key={account.id} account={account} report={report} />
-            ))}
-          </div>
+          <Kpi
+            label="Taux de réussite"
+            value={formatPercent(stats.winRate, 0)}
+            sub={`${stats.wins} gagnant(s) · ${stats.losses} perdant(s)`}
+          />
+          <Kpi label="Profit factor" value={formatProfitFactor(stats.profitFactor)} sub="Gains bruts ÷ pertes brutes" />
+          <Kpi
+            label="Espérance / trade"
+            value={<PnlAmount value={stats.expectancy} currency={currency} />}
+            sub={stats.avgR === null ? 'R : risque non renseigné' : `soit ${formatR(stats.avgR)} par trade`}
+          />
+          <Kpi
+            label="Drawdown réalisé (historique)"
+            value={formatMoney(stats.maxDrawdown, currency)}
+            valueClass={stats.maxDrawdown > 0 ? 'text-loss' : undefined}
+            sub="Plus forte baisse depuis le départ"
+          />
+          <Kpi
+            label="Meilleur jour"
+            value={bestDay ? <PnlAmount value={bestDay.pnl} currency={currency} /> : '—'}
+            sub={bestDay ? `${bestDay.label} · ${bestDay.count} trade(s)` : 'Aucune journée'}
+          />
         </section>
+
+        {/* Courbe d’équité et drawdown synchronisés ; à droite, respect du plan et derniers trades */}
+        <div className="mt-6 grid gap-4 lg:grid-cols-12">
+          <div className="flex min-w-0 flex-col gap-4 lg:col-span-8">
+            <EquityPanel key={scope} trades={scopeTrades} startingBalance={startingBalance} currency={currency} rule={rule} />
+
+            {/* Le mois en cours sous la courbe : la colonne se remplit au lieu de laisser un vide à côté de la liste des trades */}
+            <Card className="flex flex-1 flex-col p-5">
+              <SectionTitle
+                title="Bilan du mois"
+                description={`${monthLabel} · du 1er au ${formatDate(`${today}T12:00:00Z`, { day: 'numeric', timeZone: 'UTC' })}.`}
+                action={
+                  <Link
+                    to="/bilan?periode=mois"
+                    className="whitespace-nowrap text-xs font-medium text-accent transition-colors hover:text-accent-hi"
+                  >
+                    Ouvrir le bilan →
+                  </Link>
+                }
+              />
+              <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+                <MonthStat
+                  label="P&L net"
+                  value={<PnlAmount value={monthStats.netPnl} currency={currency} />}
+                  sub={`Mois préc. ${formatMoney(previousPnl, currency, true)}`}
+                />
+                <MonthStat
+                  label="Trades"
+                  value={monthStats.count}
+                  sub={`${monthStats.wins} G · ${monthStats.losses} P · ${monthStats.breakeven} BE`}
+                />
+                <MonthStat label="Réussite" value={formatPercent(monthStats.count > 0 ? monthStats.winRate : null)} sub="Trades décidés" />
+                <MonthStat label="Jours tradés" value={`${tradedDays.length} / ${month.length}`} sub="Depuis le 1er du mois" />
+              </div>
+
+              {monthBest && monthWorst ? (
+                <div className="mt-auto flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-4 text-xs text-muted">
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    Meilleur jour <span className="text-fg-2">{dayMonthLabel(monthBest.day)}</span>
+                    <PnlAmount value={monthBest.pnl} currency={currency} className="font-medium" />
+                  </span>
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    Pire jour <span className="text-fg-2">{dayMonthLabel(monthWorst.day)}</span>
+                    <PnlAmount value={monthWorst.pnl} currency={currency} className="font-medium" />
+                  </span>
+                </div>
+              ) : (
+                <p className="mt-auto border-t border-line pt-4 text-xs text-muted">
+                  Aucun trade ce mois-ci : le bilan se remplira au premier trade clôturé.
+                </p>
+              )}
+            </Card>
+          </div>
+
+          <div className="stagger flex min-w-0 flex-col gap-4 lg:col-span-4">
+            <OpenPositions
+              trades={scopeTrades}
+              accountName={(id) => accountById.get(id)?.name ?? '—'}
+              currencyOf={(id) => accountById.get(id)?.currency ?? DEFAULT_CURRENCY}
+            />
+
+            <Card className="p-5">
+              <div className="text-[13px] text-muted">Respect du plan</div>
+              <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="text-3xl font-semibold tabular-nums tracking-tight text-fg">
+                  {stats.planRespectedRate === null ? '—' : formatPercent(stats.planRespectedRate, 0)}
+                </span>
+                <span className="text-xs text-muted">des trades renseignés</span>
+              </div>
+              <ProgressBar ratio={(stats.planRespectedRate ?? 0) / 100} className="bg-accent" track="mt-4 w-full" />
+              <div className="mt-3 text-xs text-muted">
+                {planYes} trade(s) dans le plan sur {planTracked} renseigné(s)
+              </div>
+            </Card>
+
+            <Card className="flex-1 p-5">
+              <SectionTitle
+                title="Derniers trades"
+                action={
+                  <Link to="/trades" className="text-xs font-medium text-accent transition-colors hover:text-accent-hi">
+                    Tout voir
+                  </Link>
+                }
+              />
+              {recent.length === 0 ? (
+                <p className="text-sm text-muted">Aucun trade sur ce périmètre pour l’instant.</p>
+              ) : (
+                <ul className="-my-2 divide-y divide-line">
+                  {recent.map((t) => {
+                    const account = accountById.get(t.account_id);
+                    return (
+                      <li key={t.id}>
+                        <Link
+                          to={`/trades/${t.id}`}
+                          className="-mx-2 flex items-center justify-between gap-3 rounded-xl px-2 py-3 transition-colors hover:bg-surface-2"
+                        >
+                          <span className="min-w-0">
+                            <span className="flex items-center gap-2">
+                              <span className="font-medium text-fg">{t.instrument}</span>
+                              <Badge tone={t.direction === 'long' ? 'good' : 'bad'}>{t.direction === 'long' ? 'Achat' : 'Vente'}</Badge>
+                            </span>
+                            <span className="mt-0.5 block truncate text-xs text-muted">
+                              {formatDateTime(t.opened_at)} · {account?.name ?? '—'}
+                            </span>
+                          </span>
+                          <PnlAmount value={t.net_pnl} currency={account?.currency ?? DEFAULT_CURRENCY} className="shrink-0 font-semibold" />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Card>
+          </div>
+        </div>
+      </Section>
+
+      {/* Règles prop firm : marge restante en $, et risque de ruine sur un compte précis */}
+      {(reports.length > 0 || single) && (
+        <Section
+          title="Risque & discipline"
+          description="La limite journalière, le drawdown et l’objectif de tes comptes à règles. Les positions ouvertes comptent ici — c’est ce qui peut te sortir d’un challenge."
+        >
+          {reports.length > 0 && (
+            <div className={cn('grid gap-4', reports.length > 1 && 'md:grid-cols-2')}>
+              {reports.map(({ account, report }) => (
+                <RuleCard key={account.id} account={account} report={report} />
+              ))}
+            </div>
+          )}
+
+          {single && (
+            <div className={cn(reports.length > 0 && 'mt-4')}>
+              <RuinPanel
+                key={single.id}
+                account={single}
+                trades={tradeList.filter((t) => t.account_id === single.id)}
+                currency={single.currency}
+              />
+            </div>
+          )}
+        </Section>
       )}
+
+      {/* Rythme : la régularité jour après jour. Le calendrier mensuel complet vit dans le Journal. */}
+      <Section title="Rythme" description="Ce que tu fais jour après jour. Le calendrier mensuel complet est dans le Journal.">
+        <div className="grid gap-4 lg:grid-cols-12">
+          <div className="min-w-0 lg:col-span-5">
+            <WeekStrip daily={daily} tz={tz} currency={currency} />
+          </div>
+          <div className="min-w-0 lg:col-span-7">
+            <DailyPnlChart key={`daily-${scope}`} bars={days} currency={currency} />
+          </div>
+        </div>
+      </Section>
     </>
   );
 }

@@ -26,9 +26,16 @@ export function useAccounts() {
   return useQuery({ queryKey: queryKeys.accounts, queryFn: () => repo.listAccounts() });
 }
 
-export function useTrades() {
+/**
+ * Trades du journal. `limit` ne charge que les plus récents (table des trades) ;
+ * sans limite, tout l'historique est chargé (pages d'agrégat et de statistiques).
+ */
+export function useTrades(limit?: number) {
   const repo = useRepo();
-  return useQuery({ queryKey: queryKeys.trades, queryFn: () => repo.listTrades() });
+  return useQuery({
+    queryKey: limit ? (['trades', limit] as const) : queryKeys.trades,
+    queryFn: () => repo.listTrades(limit ? { limit } : undefined),
+  });
 }
 
 export function useNotes() {

@@ -221,7 +221,7 @@ export function QuickTradeSheet({ accounts, defaultAccountId, onClose }: { accou
               <Input type="datetime-local" lang="fr-FR" value={openedLocal} onChange={(e) => setOpenedLocal(e.target.value)} />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="P&L net *" hint="Après frais.">
+              <Field label="P&L net *" hint="Après frais. La position reste ouverte : ce montant est son P&L flottant.">
                 <Input inputMode="decimal" value={net} onChange={(e) => setNet(e.target.value)} placeholder="ex. 150 ou -80" />
               </Field>
               <Field label="Risque" hint="Montant risqué, pour le R.">

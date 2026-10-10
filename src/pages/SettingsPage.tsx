@@ -13,6 +13,17 @@ import { errorMessage, useToast } from '../components/Toast';
 import { usePalette } from '../components/PaletteContext';
 import { PALETTE_LABELS, PALETTE_NAMES } from '../lib/palette';
 import { applyDisplayPrefs, readDisplayPrefs, safeStorage, writeDisplayPrefs, type DisplayPrefs } from '../lib/display';
+import {
+  ALERT_LEVELS,
+  ALERT_LEVEL_LABELS,
+  ALERT_SETTINGS_KEY,
+  parseAlertSettings,
+  serializeAlertSettings,
+  webhookBody,
+  type AlertPayload,
+  type AlertSettings,
+} from '../lib/alerts';
+import { postAlert } from '../components/useRuleAlerts';
 import { Button, Card, Field, Input, Loading, PageHeader, Segmented, Select, SectionTitle } from '../components/ui';
 
 export default function SettingsPage() {
@@ -187,6 +198,7 @@ function SettingsForm({ profile }: { profile: Profile }) {
             </p>
           </div>
           <DisplayControls />
+          <AlertControls />
           <div className="flex justify-end">
             <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
               Enregistrer
@@ -426,5 +438,111 @@ function DisplayControls() {
         <p className="text-xs leading-relaxed text-muted">Enregistré sur cet appareil.</p>
       </div>
     </>
+  );
+}
+
+/** Alertes de règles : notification du navigateur et webhook, réglés sur cet appareil. */
+function AlertControls() {
+  const storage = safeStorage();
+  const [settings, setSettings] = useState<AlertSettings>(() =>
+    parseAlertSettings(storage?.getItem(ALERT_SETTINGS_KEY) ?? null),
+  );
+  const [message, setMessage] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  const update = (next: AlertSettings) => {
+    setSettings(next);
+    try {
+      storage?.setItem(ALERT_SETTINGS_KEY, serializeAlertSettings(next));
+    } catch {
+      // Stockage indisponible : le réglage vaut pour cette session.
+    }
+  };
+
+  const setBrowser = async (value: string) => {
+    setMessage(null);
+    if (value === 'off') {
+      update({ ...settings, browser: false });
+      return;
+    }
+    if (typeof Notification === 'undefined') {
+      setMessage('Ce navigateur ne gère pas les notifications.');
+      return;
+    }
+    const granted = Notification.permission === 'granted' || (await Notification.requestPermission()) === 'granted';
+    if (granted) update({ ...settings, browser: true });
+    else setMessage('Autorisation refusée : les alertes du navigateur restent désactivées.');
+  };
+
+  const testWebhook = async () => {
+    setTesting(true);
+    const payload: AlertPayload = {
+      accountId: 'test',
+      accountName: 'Test',
+      level: 'danger',
+      gauge: 'overall',
+      title: 'Test d’alerte',
+      body: 'Si tu lis ceci, le webhook est bien branché.',
+    };
+    const ok = await postAlert(settings.webhookUrl, webhookBody(payload, dayKey(new Date(), 'UTC')));
+    setTesting(false);
+    setMessage(ok ? 'Webhook joignable.' : 'Le webhook n’a pas répondu correctement. Vérifie l’URL.');
+  };
+
+  return (
+    <div className="space-y-4 border-t border-line pt-5">
+      <div>
+        <div className="text-sm font-medium text-fg">Alertes de règles</div>
+        <p className="mt-1 text-xs leading-relaxed text-muted">
+          Préviens-moi quand une limite approche. Une alerte ne sort qu’une fois par seuil et par jour, et
+          seulement quand l’application est ouverte.
+        </p>
+      </div>
+      <div className="space-y-2">
+        <div className="text-[13px] text-muted">Notification du navigateur</div>
+        <Segmented
+          id="alerts-browser"
+          label="Notification du navigateur"
+          options={[
+            { value: 'off', label: 'Désactivées' },
+            { value: 'on', label: 'Activées' },
+          ]}
+          value={settings.browser ? 'on' : 'off'}
+          onChange={(value) => void setBrowser(value)}
+        />
+      </div>
+      <Field label="Webhook" hint="POST JSON à chaque alerte (bot Telegram, relais maison…). Vide = désactivé.">
+        <div className="flex gap-2">
+          <Input
+            type="url"
+            inputMode="url"
+            placeholder="https://…"
+            aria-label="URL du webhook"
+            value={settings.webhookUrl}
+            onChange={(e) => update({ ...settings, webhookUrl: e.target.value })}
+          />
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!settings.webhookUrl}
+            loading={testing}
+            onClick={() => void testWebhook()}
+          >
+            Tester
+          </Button>
+        </div>
+      </Field>
+      <div className="space-y-2">
+        <div className="text-[13px] text-muted">Niveau minimal</div>
+        <Segmented
+          id="alerts-level"
+          label="Niveau minimal d’alerte"
+          options={ALERT_LEVELS.map((level) => ({ value: level, label: ALERT_LEVEL_LABELS[level] }))}
+          value={settings.minLevel}
+          onChange={(minLevel) => update({ ...settings, minLevel })}
+        />
+      </div>
+      {message && <p className="text-xs leading-relaxed text-accent-hi">{message}</p>}
+    </div>
   );
 }

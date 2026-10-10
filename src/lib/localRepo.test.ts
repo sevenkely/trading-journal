@@ -71,4 +71,19 @@ describe('localRepo (mode démo)', () => {
     const updated = await repo.updateProfile({ default_currency: 'EUR' });
     expect(updated.default_currency).toBe('EUR');
   });
+
+  it('ne renvoie que les trades les plus récents quand une limite est demandée', async () => {
+    const repo = createLocalRepo();
+    const account = await repo.createAccount(accountInput());
+    await repo.insertTrades([
+      tradeInput({ account_id: account.id, instrument: 'VIEUX', opened_at: '2026-09-01T08:00:00.000Z' }),
+      tradeInput({ account_id: account.id, instrument: 'RECENT', opened_at: '2026-10-05T08:00:00.000Z' }),
+      tradeInput({ account_id: account.id, instrument: 'PLUS RECENT', opened_at: '2026-10-06T08:00:00.000Z' }),
+    ]);
+
+    expect(await repo.listTrades()).toHaveLength(3);
+    const limited = await repo.listTrades({ limit: 2 });
+    expect(limited.map((t) => t.instrument).sort()).toEqual(['PLUS RECENT', 'RECENT']);
+    expect(await repo.listTrades({ limit: 10 })).toHaveLength(3);
+  });
 });

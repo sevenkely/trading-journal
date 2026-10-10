@@ -1,5 +1,6 @@
 import type { Trade } from './types';
 import { dayKey } from './format';
+import { isOpen } from './metrics';
 
 /** Un trade ouvert dans ce délai après la clôture d'une perte est signalé comme une revanche probable. */
 export const REVENGE_WINDOW_MINUTES = 15;
@@ -24,10 +25,10 @@ export function revengeTrades(trades: Trade[], windowMinutes = REVENGE_WINDOW_MI
   const flagged: Trade[] = [];
   for (const t of sorted) {
     const opened = openedAt(t);
-    // Dernière position clôturée avant cette ouverture
+    // Dernière position clôturée avant cette ouverture (une position encore ouverte ne compte pas)
     let previous: Trade | null = null;
     for (const p of sorted) {
-      if (p.id === t.id || closedAt(p) > opened) continue;
+      if (p.id === t.id || isOpen(p) || closedAt(p) > opened) continue;
       if (previous === null || closedAt(p) > closedAt(previous)) previous = p;
     }
     if (previous && previous.net_pnl < 0 && opened - closedAt(previous) <= windowMinutes * 60_000) {

@@ -2,14 +2,17 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { CalendarHeatmap } from '../components/charts/CalendarHeatmap';
+import { MemoryRouter } from 'react-router-dom';
 import { DailyPnlChart } from '../components/charts/DailyPnlChart';
 import { EquityPanel } from '../components/charts/EquityPanel';
 import { HourDayHeatmap } from '../components/charts/HourDayHeatmap';
 import { OutcomeBar } from '../components/charts/OutcomeBar';
 import { RHistogram } from '../components/charts/RHistogram';
+import { DisciplineChart, type DisciplineGroup } from '../components/charts/DisciplineChart';
+import { WeekdayPnlChart } from '../components/charts/WeekdayPnlChart';
+import { WeekStrip } from '../components/charts/WeekStrip';
 import { dailyBars, hourGrid, outcomeSplit } from '../lib/chartData';
-import { dailyMap } from '../lib/metrics';
+import { dailyMap, type BreakdownRow } from '../lib/metrics';
 import type { Trade } from '../lib/types';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -118,27 +121,30 @@ describe('graphiques', () => {
     expect(el.textContent).toContain('le R n’est pas calculable');
   });
 
-  it('le calendrier ouvre les trades d’un jour au clic', async () => {
-    const onSelect = vi.fn();
+  it('la bande de rythme couvre six semaines pleines et nomme chaque jour de trading', async () => {
+    // Mardi 10 mars 2026 : la bande part du lundi 2 février et va jusqu’au 15 mars
     const el = await render(
-      <CalendarHeatmap daily={dailyMap(sample, 'UTC')} initialMonth="2026-03" currency="USD" onSelectDay={onSelect} />,
+      <MemoryRouter>
+        <WeekStrip daily={dailyMap(sample, 'UTC')} tz="UTC" currency="USD" now={new Date('2026-03-10T12:00:00Z')} />
+      </MemoryRouter>,
     );
-    expect(el.textContent).toContain('Mars 2026');
-    const day = el.querySelector<HTMLButtonElement>('button[aria-label^="Mardi 3 mars"]');
-    expect(day).not.toBeNull();
-    await act(async () => {
-      day?.click();
-    });
-    expect(onSelect).toHaveBeenCalledWith('2026-03-03');
+    expect(el.querySelectorAll('[role="listitem"]')).toHaveLength(42);
+    const day = el.querySelector('[aria-label^="Mardi 3 mars"]');
+    expect(day?.getAttribute('aria-label')).toContain('1 trade(s)');
+    expect(day?.getAttribute('aria-label')).toContain('500');
+    // Les jours sans trade restent des cases, annoncées comme telles
+    expect(el.querySelector('[aria-label="Vendredi 6 mars : aucun trade"]')).not.toBeNull();
+    expect(el.textContent).toContain('4 jour(s) de trading · 2 vert(s) · 2 rouge(s)');
   });
 
-  it('le calendrier passe au mois suivant', async () => {
-    const el = await render(<CalendarHeatmap daily={new Map()} initialMonth="2026-12" currency="USD" />);
-    const next = el.querySelector<HTMLButtonElement>('button[aria-label="Mois suivant"]');
-    await act(async () => {
-      next?.click();
-    });
-    expect(el.textContent).toContain('Janvier 2027');
+  it('la bande de rythme explique l’absence de six semaines de trading', async () => {
+    const el = await render(
+      <MemoryRouter>
+        <WeekStrip daily={new Map()} tz="UTC" currency="USD" now={new Date('2026-03-10T12:00:00Z')} />
+      </MemoryRouter>,
+    );
+    expect(el.textContent).toContain('Aucun jour de trading sur les six dernières semaines');
+    expect(el.querySelectorAll('[role="listitem"]')).toHaveLength(0);
   });
 
   it('la répartition gagnants / perdants annonce les effectifs', async () => {
@@ -166,5 +172,50 @@ describe('graphiques', () => {
   it('la courbe sans trade explique l’absence de données', async () => {
     const el = await render(<EquityPanel trades={[]} startingBalance={10_000} currency="USD" />);
     expect(el.textContent).toContain('apparaîtra après le premier trade');
+  });
+
+  it('le P&L par jour de la semaine nomme le meilleur et le pire jour', async () => {
+    const rows: BreakdownRow[] = [
+      { key: 'lundi', count: 2, netPnl: 300, winRate: 100, avgPnl: 150 },
+      { key: 'mardi', count: 1, netPnl: -200, winRate: 0, avgPnl: -200 },
+      { key: 'mercredi', count: 0, netPnl: 0, winRate: 0, avgPnl: 0 },
+      { key: 'jeudi', count: 1, netPnl: 50, winRate: 100, avgPnl: 50 },
+      { key: 'vendredi', count: 0, netPnl: 0, winRate: 0, avgPnl: 0 },
+    ];
+    const el = await render(<WeekdayPnlChart rows={rows} currency="USD" />);
+    const label = el.querySelector('[role="img"]')?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('lundi');
+    expect(label).toContain('300');
+    expect(el.textContent).toContain('Meilleur : lundi');
+    expect(el.textContent).toContain('pire : mardi');
+    expect(el.querySelector('table')).not.toBeNull();
+  });
+
+  it('le P&L par jour de la semaine explique l’absence de trades', async () => {
+    const empty: BreakdownRow[] = [{ key: 'lundi', count: 0, netPnl: 0, winRate: 0, avgPnl: 0 }];
+    const el = await render(<WeekdayPnlChart rows={empty} currency="USD" />);
+    expect(el.textContent).toContain('Aucun trade sur cette période');
+  });
+
+  it('le coût de la discipline compare les groupes et chiffre l’écart', async () => {
+    const groups: DisciplineGroup[] = [
+      { label: 'Plan suivi', full: 'Plan respecté', value: 100, count: 8 },
+      { label: 'Plan non suivi', full: 'Plan non respecté', value: -250, count: 3 },
+      { label: 'Avec erreur', full: 'Erreur commise', value: 0, count: 0 },
+      { label: 'Sans erreur', full: 'Sans erreur', value: 60, count: 11 },
+    ];
+    const el = await render(<DisciplineChart groups={groups} currency="USD" />);
+    expect(el.textContent).toContain('Plan respecté');
+    expect(el.textContent).toContain('Plan non respecté');
+    expect(el.textContent).toContain('350');
+    // Le groupe vide ne produit ni barre ni ligne de tableau
+    expect(el.querySelectorAll('table tbody tr')).toHaveLength(3);
+  });
+
+  it('le coût de la discipline explique l’absence de données', async () => {
+    const el = await render(
+      <DisciplineChart groups={[{ label: 'Plan suivi', full: 'Plan respecté', value: null, count: 0 }]} currency="USD" />,
+    );
+    expect(el.textContent).toContain('Aucun trade renseigné');
   });
 });

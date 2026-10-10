@@ -186,6 +186,7 @@ describe('application en mode démo', () => {
     expect(el.textContent).toContain('Meilleur jour');
     expect(el.textContent).toContain('Drawdown réalisé (historique)');
     expect(el.textContent).toContain('Règle de cohérence dépassée');
+    expect(el.textContent).toContain('Bilan du mois');
   });
 
   it.each([
@@ -293,6 +294,48 @@ describe('application en mode démo', () => {
     expect(el.textContent).toContain('Imprimer / PDF');
   });
 
+  it('bascule le bilan de la semaine au mois, puis revient', async () => {
+    await seed();
+    const el = await mountAt('/bilan', 'Jour par jour');
+    await clickButton(el, 'Mois');
+    expect(el.textContent).toContain('Bilan du mois');
+    expect(el.textContent).toContain('Semaine par semaine');
+    expect(el.textContent).toContain('Mois préc.');
+    await clickButton(el, 'Semaine');
+    expect(el.textContent).toContain('Jour par jour');
+  });
+
+  it('avance d’une année entière dans le bilan des douze mois', async () => {
+    await seed();
+    const el = await mountAt('/bilan?periode=12m', 'Mois par mois');
+    const before = el.textContent ?? '';
+    await act(async () => {
+      [...el.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === 'Les douze mois précédents')?.click();
+    });
+    await settle();
+    const after = el.textContent ?? '';
+    expect(after).not.toBe(before);
+    expect(after).toContain('Les douze derniers mois');
+    expect(after).toContain('12 mois préc.');
+  });
+
+  it('ouvre le bilan directement sur le mois demandé par le lien', async () => {
+    await seed();
+    const el = await mountAt('/bilan?periode=mois', 'Semaine par semaine');
+    expect(el.textContent).toContain('Bilan du mois');
+  });
+
+  it('affiche le bilan des douze derniers mois, mois par mois, avec la tendance', async () => {
+    await seed();
+    const el = await mountAt('/bilan?periode=12m', 'Mois par mois');
+    expect(el.textContent).toContain('P&L par mois');
+    expect(el.textContent).toContain('Mois tradés');
+    expect(el.textContent).toContain('Meilleur mois');
+    expect(el.textContent).toContain('Pire mois');
+    expect(el.textContent).toContain('12 mois préc.');
+    expect(el.textContent).toContain('Cumul depuis le début de la fenêtre');
+  });
+
   it('ouvre la recherche rapide avec Ctrl+K et propose pages et trades récents', async () => {
     await seed();
     const el = await mountAt('/', 'Derniers trades');
@@ -303,7 +346,7 @@ describe('application en mode démo', () => {
     const dialog = el.querySelector('[role="dialog"]');
     expect(dialog?.getAttribute('aria-label')).toBe('Recherche rapide');
     expect(el.textContent).toContain('Nouveau compte');
-    expect(el.textContent).toContain('Bilan de la semaine');
+    expect(dialog?.textContent).toContain('Bilan');
     // Une seconde frappe referme la palette
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));

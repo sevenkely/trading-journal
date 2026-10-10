@@ -23,6 +23,53 @@ export function weekKeys(monday: string): string[] {
   return Array.from({ length: 7 }, (_, i) => shiftDays(monday, i));
 }
 
+/** Mois (YYYY-MM) décalé de `delta` mois, sans dépendre du fuseau (calcul en UTC). */
+export function shiftMonthKey(monthKey: string, delta: number): string {
+  const [year, month] = monthKey.split('-').map(Number);
+  const d = new Date(Date.UTC(year, month - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Premier et dernier jour (YYYY-MM-DD) d’un mois YYYY-MM. */
+export function monthBounds(monthKey: string): { first: string; last: string } {
+  const [year, month] = monthKey.split('-').map(Number);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return { first: `${monthKey}-01`, last: `${monthKey}-${String(daysInMonth).padStart(2, '0')}` };
+}
+
+/** Tous les jours (YYYY-MM-DD) d’un mois, dans l’ordre. */
+export function monthDays(monthKey: string): string[] {
+  const { last } = monthBounds(monthKey);
+  const count = Number(last.slice(-2));
+  return Array.from({ length: count }, (_, i) => `${monthKey}-${String(i + 1).padStart(2, '0')}`);
+}
+
+/** Numéro de jour (0 = lundi) d’une date YYYY-MM-DD, lu en UTC pour ne pas décaler le jour. */
+function weekdayIndex(date: string): number {
+  return (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7;
+}
+
+/**
+ * Les `count` derniers mois (YYYY-MM) qui se terminent à `endMonth`, du plus ancien au plus récent.
+ * C’est la fenêtre du bilan annuel : douze mois glissants, à cheval sur deux années civiles.
+ */
+export function lastMonths(endMonth: string, count: number): string[] {
+  return Array.from({ length: count }, (_, i) => shiftMonthKey(endMonth, i + 1 - count));
+}
+
+/**
+ * Découpe un mois en semaines civiles (lundi → dimanche), tronquées aux bords du mois :
+ * le premier et le dernier groupe peuvent être partiels. C’est le découpage du bilan mensuel.
+ */
+export function monthWeeks(monthKey: string): string[][] {
+  const weeks: string[][] = [];
+  for (const date of monthDays(monthKey)) {
+    if (weeks.length === 0 || weekdayIndex(date) === 0) weeks.push([]);
+    weeks[weeks.length - 1].push(date);
+  }
+  return weeks;
+}
+
 export interface HeatCell {
   pnl: number;
   count: number;

@@ -106,6 +106,18 @@ export function RuleCard({ account, report }: { account: Account; report: RuleRe
         </div>
       </div>
 
+      {report.openCount > 0 && (
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl border border-line bg-surface-2/40 px-3.5 py-2.5 text-xs text-muted">
+          <span>
+            {report.openCount} position{report.openCount > 1 ? 's' : ''} ouverte{report.openCount > 1 ? 's' : ''} · flottant
+          </span>
+          <PnlAmount value={report.floatingPnl} currency={currency} className="font-medium" />
+          <span className="ml-auto">
+            équité avec flottant <span className="font-medium tabular-nums text-fg-2">{formatMoney(report.equityWithFloating, currency)}</span>
+          </span>
+        </div>
+      )}
+
       {report.gauges.length > 0 && (
         <div className="space-y-4">
           {report.gauges.map((g) => (

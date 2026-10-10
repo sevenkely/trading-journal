@@ -4,6 +4,27 @@ import { dayKey } from './format';
 /** Date de référence d'un trade : clôture si connue, sinon ouverture. */
 export const tradeTime = (t: Trade): string => t.closed_at ?? t.opened_at;
 
+/**
+ * Une position est ouverte tant qu'aucune clôture n'est enregistrée : son P&L est flottant,
+ * pas réalisé. Toutes les mesures de performance ne comptent que le réalisé.
+ */
+export const isOpen = (t: Trade): boolean => t.closed_at === null;
+
+/** Sépare les positions ouvertes (P&L flottant) des trades clôturés (P&L réalisé). */
+export function splitTrades(trades: Trade[]): { realized: Trade[]; open: Trade[] } {
+  const realized: Trade[] = [];
+  const open: Trade[] = [];
+  for (const t of trades) (isOpen(t) ? open : realized).push(t);
+  return { realized, open };
+}
+
+/** Somme du P&L net flottant des positions ouvertes. */
+export function floatingPnl(trades: Trade[]): number {
+  return trades.reduce((sum, t) => (isOpen(t) ? sum + t.net_pnl : sum), 0);
+}
+
+const realizedOnly = (trades: Trade[]): Trade[] => trades.filter((t) => !isOpen(t));
+
 const toMs = (iso: string): number => new Date(iso).getTime();
 
 export function sortByTradeTime(trades: Trade[]): Trade[] {
@@ -56,7 +77,7 @@ export interface Stats {
 }
 
 export function computeStats(trades: Trade[], tz = 'UTC'): Stats {
-  const sorted = sortByTradeTime(trades);
+  const sorted = sortByTradeTime(realizedOnly(trades));
   let wins = 0;
   let losses = 0;
   let breakeven = 0;
@@ -168,7 +189,7 @@ export interface EquityPoint {
 export function equitySeries(trades: Trade[], startingBalance: number): EquityPoint[] {
   let equity = startingBalance;
   const points: EquityPoint[] = [{ n: 0, time: '', equity: startingBalance, pnl: 0 }];
-  sortByTradeTime(trades).forEach((t, i) => {
+  sortByTradeTime(realizedOnly(trades)).forEach((t, i) => {
     equity += t.net_pnl;
     points.push({ n: i + 1, time: tradeTime(t), equity, pnl: t.net_pnl });
   });
@@ -182,7 +203,7 @@ export interface DayCell {
 
 export function dailyMap(trades: Trade[], tz: string): Map<string, DayCell> {
   const map = new Map<string, DayCell>();
-  for (const t of trades) {
+  for (const t of realizedOnly(trades)) {
     const key = dayKey(tradeTime(t), tz);
     const cell = map.get(key) ?? { pnl: 0, count: 0 };
     cell.pnl += t.net_pnl;
@@ -210,7 +231,7 @@ export function breakdown(
   emptyLabel: string | null = 'Non renseigné',
 ): BreakdownRow[] {
   const groups = new Map<string, Trade[]>();
-  for (const t of trades) {
+  for (const t of realizedOnly(trades)) {
     const raw = keysOf(t);
     const keys = (Array.isArray(raw) ? raw : [raw])
       .map((k) => (k ?? '').trim())

@@ -4,9 +4,14 @@ import { useAccounts, useProfile, useTrades } from '../data/hooks';
 import { usePalette } from '../components/PaletteContext';
 import { detectBehavior, MAX_TRADES_PER_DAY, REVENGE_WINDOW_MINUTES } from '../lib/behavior';
 import { extremes } from '../lib/highlights';
-import { breakdown, computeStats, sortByTradeTime, tradeTime, weekdayOf, type BreakdownRow } from '../lib/metrics';
-import { hourGrid } from '../lib/chartData';
+import { breakdown, computeStats, isOpen, sortByTradeTime, tradeTime, weekdayOf, type BreakdownRow } from '../lib/metrics';
+import { hourGrid, outcomeSplit, rMultiples } from '../lib/chartData';
 import { HourDayHeatmap } from '../components/charts/HourDayHeatmap';
+import { OutcomeBar } from '../components/charts/OutcomeBar';
+import { RHistogram } from '../components/charts/RHistogram';
+import { WeekdayPnlChart } from '../components/charts/WeekdayPnlChart';
+import { DisciplineChart, type DisciplineGroup } from '../components/charts/DisciplineChart';
+import { ComparePanel } from '../components/ComparePanel';
 import {
   capFirst,
   dayKey,
@@ -302,14 +307,30 @@ export default function AnalysisPage() {
   const heat = hourGrid(scoped);
 
   const stats = computeStats(scoped, tz);
-  const planYes = scoped.filter((t) => t.plan_respected === true);
-  const planNo = scoped.filter((t) => t.plan_respected === false);
-  const withMistakes = scoped.filter((t) => t.mistakes.length > 0);
-  const withoutMistakes = scoped.filter((t) => t.mistakes.length === 0);
+  // Le réalisé seulement : une position ouverte n'a pas de résultat, juste un P&L flottant
+  const realized = scoped.filter((t) => !isOpen(t));
+  const openCount = scoped.length - realized.length;
+  const planYes = realized.filter((t) => t.plan_respected === true);
+  const planNo = realized.filter((t) => t.plan_respected === false);
+  const withMistakes = realized.filter((t) => t.mistakes.length > 0);
+  const withoutMistakes = realized.filter((t) => t.mistakes.length === 0);
+
+  const rValues = rMultiples(scoped);
+  const split = outcomeSplit(scoped);
+  const weekdayRows = inOrder(
+    breakdown(scoped, (t) => weekdayOf(tradeTime(t), tz)),
+    WEEKDAYS,
+  );
+  const discipline: DisciplineGroup[] = [
+    { label: 'Plan suivi', full: 'Plan respecté', value: average(planYes), count: planYes.length },
+    { label: 'Plan non suivi', full: 'Plan non respecté', value: average(planNo), count: planNo.length },
+    { label: 'Avec erreur', full: 'Erreur commise', value: average(withMistakes), count: withMistakes.length },
+    { label: 'Sans erreur', full: 'Sans erreur', value: average(withoutMistakes), count: withoutMistakes.length },
+  ];
 
   const groups: Group[] = [
     { title: 'Session', short: 'Session', rows: inOrder(breakdown(scoped, (t) => t.session), SESSIONS) },
-    { title: 'Jour de la semaine', short: 'Jour', rows: inOrder(breakdown(scoped, (t) => weekdayOf(tradeTime(t), tz)), WEEKDAYS) },
+    { title: 'Jour de la semaine', short: 'Jour', rows: weekdayRows },
     { title: 'Instrument', short: 'Instrument', rows: breakdown(scoped, (t) => t.instrument) },
     { title: 'Setup', short: 'Setup', rows: breakdown(scoped, (t) => t.setup) },
     { title: 'Timeframe', short: 'Timeframe', rows: breakdown(scoped, (t) => t.timeframe) },
@@ -339,6 +360,13 @@ export default function AnalysisPage() {
         <Segmented id="period" label="Période" options={PERIODS} value={days} onChange={setDays} />
       </div>
 
+      {openCount > 0 && (
+        <p className="mb-6 rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-sm text-accent-hi">
+          {openCount} position{openCount > 1 ? 's' : ''} ouverte{openCount > 1 ? 's' : ''} : cette page ne mesure que le
+          réalisé. Le P&L flottant compte dans les limites de risque, pas dans ces statistiques.
+        </p>
+      )}
+
       {stats.count === 0 ? (
         <Card>
           <p className="text-sm text-muted">Aucun trade sur cette période. Élargis le filtre pour voir l’analyse.</p>
@@ -359,6 +387,12 @@ export default function AnalysisPage() {
             <Stat label="Pire jour" value={<PnlAmount value={stats.worstDay} currency={currency} />} />
           </StatStrip>
 
+          {/* Répartition des résultats : ce que les chiffres du haut résument */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <RHistogram values={rValues} />
+            <OutcomeBar split={split} />
+          </div>
+
           <Card>
             <SectionTitle title="Discipline" description="Impact du respect du plan et des erreurs sur tes résultats." />
             <StatStrip>
@@ -375,6 +409,9 @@ export default function AnalysisPage() {
                 sub={`${withMistakes.length} sans erreur : ${formatMoney(average(withoutMistakes), currency, true)}`}
               />
             </StatStrip>
+            <div className="mt-5">
+              <DisciplineChart groups={discipline} currency={currency} />
+            </div>
           </Card>
 
           {/* Détails repliés : gains et pertes moyens, régularité */}
@@ -413,6 +450,8 @@ export default function AnalysisPage() {
             currencyOf={(t) => currencyOf.get(t.account_id) ?? DEFAULT_CURRENCY}
           />
 
+          <WeekdayPnlChart rows={weekdayRows} currency={currency} />
+
           <Card>
             <SectionTitle
               title="Jour × heure d’entrée"
@@ -424,6 +463,11 @@ export default function AnalysisPage() {
           <Breakdown groups={groups} currency={currency} />
         </div>
       )}
+
+      {/* Comparaison : mesurer un progrès dans le temps, ou deux comptes l’un contre l’autre */}
+      <div className="mt-6">
+        <ComparePanel trades={trades ?? []} accounts={accountList} tz={tz} currency={currency} periods={PERIODS} />
+      </div>
     </>
   );
 }

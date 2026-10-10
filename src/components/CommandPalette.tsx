@@ -48,7 +48,7 @@ const PAGES: Omit<PaletteItem, 'search'>[] = [
   { id: 'page-trades', label: 'Trades', to: '/trades', icon: ListOrdered },
   { id: 'page-journal', label: 'Journal', to: '/journal', icon: BookOpen },
   { id: 'page-analysis', label: 'Analyse', to: '/analyse', icon: BarChart3 },
-  { id: 'page-report', label: 'Bilan de la semaine', to: '/bilan', icon: CalendarDays },
+  { id: 'page-report', label: 'Bilan', detail: 'Semaine, mois ou 12 mois', to: '/bilan', icon: CalendarDays },
   { id: 'page-import', label: 'Import', to: '/import', icon: Upload },
   { id: 'page-settings', label: 'Paramètres', detail: 'Profil, checklist, sauvegarde', to: '/parametres', icon: Settings },
 ];

@@ -1,4 +1,4 @@
-# Trading Journal
+# Seven Journal
 
 Journal de trading personnel et prop firm : statistiques, règles de la firme, discipline et revue visuelle.
 Stack : **React + TypeScript**, **Vite**, **Tailwind CSS**, **Supabase** (Postgres, Auth par lien magique, RLS, Storage) et **Vercel**.
@@ -7,13 +7,18 @@ Stack : **React + TypeScript**, **Vite**, **Tailwind CSS**, **Supabase** (Postgr
 
 - **Comptes** : personnel, challenge (évaluation) ou compte financé, avec firme, plateforme et devise (USD par défaut, configurable par compte).
 - **Trades** : saisie manuelle, ou import depuis MetaTrader 5, NinjaTrader / Tradovate et TradingView. Les doublons sont ignorés, et un import peut être annulé.
-- **Statistiques** : P&L net, taux de réussite, profit factor, espérance, R multiple, drawdown réalisé, courbe d’équité, respect du plan.
+- **Statistiques** : P&L net, taux de réussite, profit factor, espérance, R multiple, drawdown réalisé, courbe d’équité, respect du plan. Seul le **réalisé** compte : une position encore ouverte n’entre ni dans les statistiques, ni dans la courbe, ni dans le calendrier.
+- **Positions ouvertes & P&L flottant** : un trade sans date de clôture est une position ouverte. Son P&L flottant s’affiche sur le tableau de bord (panneau « Positions ouvertes ») et **compte dans les limites de risque** — perte journalière et drawdown — pour une lecture prudente.
 - **Règles prop firm** (par compte) : perte journalière, drawdown maximum (statique ou trailing), objectif de profit, jours de trading minimum, règle de cohérence. Alertes à 50 %, 80 % et 100 % de chaque limite.
 - **Psychologie** : émotions avant et après le trade, erreurs commises, plan respecté, checklist pré-trade personnalisable, notes et tags.
 - **Revue visuelle** : captures d’écran par trade (stockage privé Supabase).
 - **Journal** : calendrier mensuel des journées, humeur, discipline du jour, plan, bilan et leçons.
 - **Analyse** : performance par session, jour de la semaine, instrument, setup, timeframe, émotions et erreurs ; régularité (séries de gains et de pertes), comportements repérés (revanche, surtrading) et carte jour × heure d’entrée.
-- **Bilan de la semaine** : semaine du lundi au dimanche (fuseau du profil), P&L par jour, signaux de comportement, prévision indicative d’atteinte de l’objectif, impression ou PDF.
+- **Comparaison** : deux fenêtres consécutives de même durée (30 jours contre les 30 jours précédents) ou deux comptes, côte à côte et indicateur par indicateur, avec l’écart et son sens de lecture. Un écart n’est affiché que si les deux côtés ont des trades.
+- **Bilan** : au choix **semaine** (du lundi au dimanche, fuseau du profil), **mois** (du 1er au dernier jour, découpé en semaines civiles ; le mois en cours s’arrête à aujourd’hui pour ne pas compter les jours à venir comme des jours sans trade) ou **12 mois** (douze mois glissants : une barre de P&L par mois, la ligne du cumul, le meilleur et le pire mois, le tableau mois par mois). Chaque vue donne les trades, la réussite, les jours (ou mois) tradés, les signaux de comportement, la prévision indicative d’atteinte de l’objectif, et s’imprime ou s’exporte en PDF. Le tableau de bord en affiche un résumé du mois sous la courbe d’équité.
+- **Panneau « Aujourd’hui »** : P&L et flottant du jour, marge restante avant la limite journalière, checklist pré-trade et plan du jour, en tête du tableau de bord. Le reste de la page se lit en trois sections : **Performance**, **Risque & discipline**, **Rythme**.
+- **Alertes de règles** : au franchissement des seuils (50 %, 80 %, 100 %), une notification du navigateur et/ou un POST JSON vers un webhook (bot Telegram, relais maison). Une alerte ne part qu’une fois par seuil et par jour.
+- **Risque de ruine** : simulation de Monte-Carlo qui rejoue ta distribution de R sur des milliers de séquences et compare la probabilité de toucher le seuil de perte à celle d’atteindre l’objectif. Le risque par trade est ajustable.
 - **Recherche rapide** : ⌘K sur Mac, Ctrl K ailleurs, pour aller à une page, un compte ou un trade.
 - **Sauvegarde** : export JSON des comptes, trades et notes depuis Paramètres. La restauration ne rajoute jamais un trade déjà présent, n’écrase jamais une note et ne supprime rien.
 - **Accessibilité** : palette bleu / orange en option (Paramètres), symboles ▲ / ▼ sur les gains et pertes, hachures sur les pertes de la carte jour × heure, et audit automatisé des pages (axe-core, WCAG 2.2 A et AA).
@@ -37,7 +42,7 @@ Sans variables Supabase, l’application démarre en **mode démo** : les donné
 3. **Activer la connexion par email** : *Authentication → Sign In / Providers → Email* (lien magique activé).
 4. **Passer en invitation uniquement** : dans les réglages d’authentification, désactive **« Allow new users to sign up »**. Personne ne peut plus créer de compte seul.
 5. **Définir les URL** : *Authentication → URL Configuration*.
-   - *Site URL* : l’URL de production Vercel (ex. `https://trading-journal.vercel.app`).
+   - *Site URL* : l’URL de production Vercel (ex. `https://seven-journal.vercel.app`).
    - *Redirect URLs* : ajoute aussi `http://localhost:5173` pour le développement local.
 6. **Inviter les traders** : *Authentication → Users → Invite user* (saisis leur email). Ils reçoivent un lien, puis se connectent ensuite avec un lien magique.
 7. **Récupérer les clés** : *Project Settings → API*. Crée un fichier `.env.local` à la racine (modèle : `.env.example`) :
@@ -73,7 +78,9 @@ Avant chaque import, l’aperçu affiche les trades à importer, les doublons ig
 
 - **P&L net** = P&L brut − frais (commissions, swap). Seul le P&L **réalisé** est pris en compte ; le P&L flottant n’est pas inclus.
 - **Journées** : découpées selon le fuseau du compte (par défaut `Indian/Antananarivo`).
-- **Perte journalière** : perte réalisée du jour courant, comparée à la limite.
+- **Position ouverte** : un trade sans `closed_at`. Son P&L est flottant : il ne compte dans aucune statistique de performance.
+- **Perte journalière** : perte réalisée du jour courant **plus le P&L flottant de toutes les positions ouvertes**, comparée à la limite. Toute exposition ouverte est comptée dans la journée en cours, même si la position a été ouverte la veille : c’est la lecture prudente.
+- **Drawdown** : mesuré sur l’équité **avec** le flottant (`équité réalisée + P&L flottant`), contre un seuil calculé sur le plus haut d’équité **réalisée**.
 - **Drawdown statique** : seuil fixe = solde initial − drawdown maximum.
 - **Drawdown trailing** : le seuil suit le plus haut de l’équité réalisée, sans jamais dépasser le solde initial. C’est une approximation calculée sur les trades clôturés.
 - **Objectif de profit** : P&L net cumulé ≥ objectif.
@@ -82,7 +89,7 @@ Avant chaque import, l’aperçu affiche les trades à importer, les doublons ig
 - **Revanche** : trade ouvert moins de 15 min après la clôture d’un trade perdant, tous comptes confondus. C’est un indice à vérifier, pas un verdict.
 - **Surtrading** : plus de 4 trades par jour sur un même compte, dans le fuseau de ce compte.
 - **Prévision d’objectif** : reste à atteindre ÷ P&L moyen par jour de trading sur les 30 derniers jours, converti en jours ouvrés (lundi à vendredi, sans calendrier de jours fériés). Elle suppose que le rythme récent se maintient.
-- **Bilan** : la semaine va du lundi au dimanche, et chaque trade compte dans la journée de son propre compte.
+- **Bilan** : la semaine va du lundi au dimanche, le mois se découpe en semaines civiles du lundi au dimanche (tronquées au début et à la fin du mois), et chaque trade compte dans la journée de son propre compte.
 - Les heures sont saisies et affichées dans le fuseau du navigateur, puis stockées en UTC.
 
 ## Scripts
@@ -93,14 +100,18 @@ Avant chaque import, l’aperçu affiche les trades à importer, les doublons ig
 | `npm run build` | Vérification TypeScript puis build de production |
 | `npm run preview` | Prévisualisation du build |
 | `npm run typecheck` | Vérification TypeScript seule |
-| `npm test` | Tests unitaires (calculs, règles, comportements, prévision, sauvegarde, fuseaux, CSV, MT5, palette), test de fumée et audit d’accessibilité (axe-core) |
+| `npm test` | Tests unitaires (calculs, règles, flottant, comportements, prévision, risque de ruine, alertes, sauvegarde, fuseaux, CSV, MT5, palette), test de fumée et audit d’accessibilité (axe-core) |
+
+L’intégration continue (`.github/workflows/ci.yml`) lance le build et les tests sur chaque envoi et chaque pull request.
+
+> Les tests forcent le mode démo (`vite.config.ts`) : le `.env` local ne les fait pas basculer en mode Supabase, sinon ils auditeraient l’écran de connexion.
 
 ## Structure
 
 ```
 src/
-  lib/          types, calculs (metrics, rules, timezone, patterns, behavior, forecast), sauvegarde (backup),
-                imports (csv, mt5), accès aux données
+  lib/          types, calculs (metrics, rules, timezone, patterns, behavior, forecast, ruin), sauvegarde (backup),
+                alertes (alerts), imports (csv, mt5), accès aux données
                 repo.ts (contrat), supabaseRepo.ts (Supabase), localRepo.ts (mode démo)
   auth/         AuthContext (session, lien magique, mode démo)
   data/         hooks React Query
@@ -113,7 +124,10 @@ supabase/migrations/0002_screenshots_limits.sql   limites du bucket (taille, typ
 
 ## Limites connues
 
-- Pas de P&L flottant : les règles journalières et de drawdown ne voient que les trades clôturés.
+- Le P&L flottant est celui que **tu saisis** (comme sur ta plateforme) : il n’y a pas de flux de cotations, donc pas de recalcul automatique entre deux mises à jour.
+- Les alertes ne partent que si l’application est ouverte : un envoi permanent demande un service côté serveur (Edge Function et planification).
+- Le risque de ruine est une estimation : elle suppose que les R passés représentent les R futurs, un risque fixe par trade et des trades indépendants. Elle ignore les frais et les corrélations entre positions.
+- La page Trades charge les 5 000 trades les plus récents : au-delà, filtres et totaux ne portent que sur cette fenêtre (l’application le signale). Les pages d’agrégat, elles, lisent tout l’historique.
 - Le drawdown trailing est une approximation sur les trades clôturés, pas le calcul exact de la firme.
 - Les captures d’écran ne sont disponibles qu’avec Supabase connecté.
 - Les imports NinjaTrader, Tradovate et TradingView doivent être validés avec de vrais fichiers.

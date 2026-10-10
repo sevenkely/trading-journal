@@ -97,8 +97,13 @@ export function createLocalRepo(): Repo {
       write('batches', read<ImportBatch[]>('batches', []).filter((b) => b.account_id !== id));
     },
 
-    async listTrades() {
-      return read<Trade[]>('trades', []);
+    async listTrades(options) {
+      const trades = read<Trade[]>('trades', []);
+      const limit = options?.limit;
+      if (!limit || limit <= 0 || trades.length <= limit) return trades;
+      return [...trades]
+        .sort((a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())
+        .slice(0, limit);
     },
 
     async createTrade(input, extra) {

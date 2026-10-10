@@ -1,5 +1,5 @@
 import type { Trade } from './types';
-import { dailyMap, equitySeries, type DayCell } from './metrics';
+import { dailyMap, equitySeries, isOpen } from './metrics';
 import { shiftDays, weekdayHourGrid, type HeatCell } from './patterns';
 import { round2 } from './utils';
 
@@ -156,41 +156,11 @@ export function median(values: number[]): number | null {
   return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
-export interface CalendarCell {
-  /** YYYY-MM-DD */
-  date: string;
-  day: number;
-  pnl: number;
-  count: number;
-}
-
-/** Mois au format YYYY-MM décalé de `delta` mois. */
-export function shiftMonth(monthKey: string, delta: number): string {
-  const [year, month] = monthKey.split('-').map(Number);
-  const d = new Date(Date.UTC(year, month - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-}
-
-/** Grille d’un mois, semaines de lundi à dimanche ; null = case vide hors du mois. */
-export function monthGrid(monthKey: string, daily: Map<string, DayCell>): (CalendarCell | null)[][] {
-  const [year, month] = monthKey.split('-').map(Number);
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const lead = (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7;
-  const cells: (CalendarCell | null)[] = Array.from({ length: lead }, () => null);
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = `${monthKey}-${String(day).padStart(2, '0')}`;
-    const cell = daily.get(date);
-    cells.push({ date, day, pnl: round2(cell?.pnl ?? 0), count: cell?.count ?? 0 });
-  }
-  while (cells.length % 7 !== 0) cells.push(null);
-  const weeks: (CalendarCell | null)[][] = [];
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
-  return weeks;
-}
-
-/** R réalisé de chaque trade (P&L net ÷ risque saisi). Les trades sans risque renseigné sont exclus. */
+/** R réalisé de chaque trade (P&L net ÷ risque saisi). Les positions ouvertes et les trades sans risque sont exclus. */
 export function rMultiples(trades: Trade[]): number[] {
-  return trades.flatMap((t) => (t.risk_amount && t.risk_amount > 0 ? [round2(t.net_pnl / t.risk_amount)] : []));
+  return trades.flatMap((t) =>
+    !isOpen(t) && t.risk_amount && t.risk_amount > 0 ? [round2(t.net_pnl / t.risk_amount)] : [],
+  );
 }
 
 export interface RBin {
@@ -241,12 +211,13 @@ export interface OutcomeSplit {
   total: number;
 }
 
-/** Répartition gagnants / perdants / break-even, selon le signe du P&L net. */
+/** Répartition gagnants / perdants / break-even, selon le signe du P&L net réalisé. */
 export function outcomeSplit(trades: Trade[]): OutcomeSplit {
   let wins = 0;
   let losses = 0;
   let breakeven = 0;
   for (const t of trades) {
+    if (isOpen(t)) continue;
     if (t.net_pnl > 0) wins += 1;
     else if (t.net_pnl < 0) losses += 1;
     else breakeven += 1;
@@ -254,9 +225,12 @@ export function outcomeSplit(trades: Trade[]): OutcomeSplit {
   return { wins, losses, breakeven, total: trades.length };
 }
 
-/** Carte jour × heure (heure de New York) : une case est grisée sous MIN_HEAT_SAMPLE trades. */
+/** Carte jour × heure (heure de New York) : une case est grisée sous MIN_HEAT_SAMPLE trades. P&L réalisé seulement. */
 export function hourGrid(trades: Trade[]): Map<string, HeatCell> {
-  return weekdayHourGrid(trades, HOUR_REFERENCE_TZ);
+  return weekdayHourGrid(
+    trades.filter((t) => !isOpen(t)),
+    HOUR_REFERENCE_TZ,
+  );
 }
 
 export function isThinCell(cell: HeatCell | undefined): boolean {

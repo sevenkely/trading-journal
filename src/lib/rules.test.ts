@@ -122,3 +122,47 @@ describe('jours minimum et cohérence', () => {
     expect(report.equity).toBe(10000);
   });
 });
+
+describe('P&L flottant (positions ouvertes)', () => {
+  const open = (id: string, pnl: number) => makeTrade({ id, gross_pnl: pnl, closed_at: null });
+
+  it('sépare le réalisé du flottant', () => {
+    const trades = [makeTrade({ id: 'c', gross_pnl: 200, closed_at: day(5) }), open('o', -50)];
+    const report = evaluateAccount(makeAccount(), trades, NOW);
+    expect(report.netPnl).toBe(200);
+    expect(report.floatingPnl).toBe(-50);
+    expect(report.openCount).toBe(1);
+    expect(report.equity).toBe(10200);
+    expect(report.equityWithFloating).toBe(10150);
+  });
+
+  it('ne compte pas une position ouverte parmi les jours de trading', () => {
+    const trades = [makeTrade({ id: 'c', gross_pnl: 10, closed_at: day(5) }), open('o', 10)];
+    expect(evaluateAccount(makeAccount({ min_trading_days: 1 }), trades, NOW).tradingDays).toBe(1);
+  });
+
+  it('intègre le flottant à la limite de perte journalière', () => {
+    const account = makeAccount({ daily_loss_amount: 500 });
+    const trades = [makeTrade({ id: 'c', gross_pnl: -100, closed_at: day(9) }), open('o', -300)];
+    const gauge = evaluateAccount(account, trades, NOW).gauges.find((g) => g.key === 'daily');
+    expect(gauge?.value).toBeCloseTo(400);
+    expect(gauge?.level).toBe('danger');
+    expect(gauge?.remaining).toBeCloseTo(100);
+  });
+
+  it('mesure le drawdown sur l’équité avec flottant', () => {
+    const account = makeAccount({ max_loss_amount: 1000 });
+    const trades = [makeTrade({ id: 'c', gross_pnl: -200, closed_at: day(5) }), open('o', -500)];
+    const report = evaluateAccount(account, trades, NOW);
+    const gauge = report.gauges.find((g) => g.key === 'maxLoss');
+    expect(report.floor).toBe(9000);
+    expect(gauge?.remaining).toBeCloseTo(300);
+    expect(gauge?.level).toBe('warning');
+  });
+
+  it('signale les positions ouvertes dans les alertes', () => {
+    const report = evaluateAccount(makeAccount(), [open('a', -20), open('b', 5)], NOW);
+    expect(report.alerts[0]).toContain('2 positions ouvertes');
+    expect(report.alerts[0]).toContain('-15.00');
+  });
+});

@@ -2,8 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ArrowUpDown, Bookmark, Check, ChevronLeft, ChevronRight, Download, Pencil, Plus, Search, SlidersHorizontal, Trash2, X, Zap } from 'lucide-react';
 import { useAccounts, useTrades } from '../data/hooks';
-import { computeStats } from '../lib/metrics';
-import { formatDateTime, formatPercent, formatProfitFactor, formatR } from '../lib/format';
+import { computeStats, floatingPnl, isOpen } from '../lib/metrics';
+import { formatDateTime, formatNumber, formatPercent, formatProfitFactor, formatR } from '../lib/format';
 import { tradesToCsv } from '../lib/csv';
 import { useUndoableTradeDelete } from '../data/undoableDelete';
 import { useHiddenIds } from '../lib/pendingDeletion';
@@ -33,10 +33,16 @@ import {
   type Side,
   type SortDir,
   type SortKey,
+  type StateFilter,
   type TradeQuery,
 } from '../lib/tradeQuery';
 
 const BROWSER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+/**
+ * Nombre de trades chargés pour cette page. Les filtres et le tri s'appliquent à cette fenêtre :
+ * au-delà, on charge les plus récents et on le dit, plutôt que de tout garder en mémoire.
+ */
+const TRADES_WINDOW = 5000;
 const COMPACT_KEY = 'tj-trades-compact';
 const COLUMNS_KEY = 'tj-trades-columns';
 const VIEWS_KEY = 'tj-trades-views';
@@ -59,6 +65,11 @@ const PLAN_CHIPS: { value: PlanFilter; label: string }[] = [
   { value: 'all', label: 'Tous' },
   { value: 'yes', label: 'Plan suivi' },
   { value: 'no', label: 'Plan non suivi' },
+];
+const STATE_CHIPS: { value: StateFilter; label: string }[] = [
+  { value: 'all', label: 'Tous' },
+  { value: 'open', label: 'Ouverts' },
+  { value: 'closed', label: 'Clôturés' },
 ];
 
 function readStorage(key: string): string | null {
@@ -140,7 +151,7 @@ function Pagination({ page, pageCount, onPage }: { page: number; pageCount: numb
 
 export default function TradesPage() {
   const { data: accounts, isLoading: loadingAccounts } = useAccounts();
-  const { data: trades, isLoading: loadingTrades } = useTrades();
+  const { data: trades, isLoading: loadingTrades } = useTrades(TRADES_WINDOW);
   // Filtres, tri et page vivent dans l’URL : un lien (ex. depuis le calendrier) ou une vue reproduit le même tableau
   const [params, setParams] = useSearchParams();
   const hidden = useHiddenIds();
@@ -168,6 +179,9 @@ export default function TradesPage() {
   const { page, pageCount, start, end } = paginate(sorted.length, query.page, PAGE_SIZE);
   const pageRows = sorted.slice(start, end);
   const stats = computeStats(sorted, BROWSER_TZ);
+  // Pied de tableau : ce qui est affiché, positions ouvertes comprises (leur P&L est flottant).
+  const openRows = sorted.filter(isOpen).length;
+  const shownPnl = stats.netPnl + floatingPnl(sorted);
   const currencies = [...new Set(sorted.map((t) => accountById.get(t.account_id)?.currency ?? 'USD'))];
   const currency = currencies.length === 1 ? currencies[0] : 'USD';
   const filtersActive = query.account !== DEFAULT_QUERY.account || query.outcome !== 'all' || query.side !== 'all' || query.plan !== 'all' || query.q !== '' || query.from !== '' || query.to !== '';
@@ -308,6 +322,13 @@ export default function TradesPage() {
         }
       />
 
+      {(trades?.length ?? 0) >= TRADES_WINDOW && (
+        <p className="mb-5 rounded-xl border border-accent/20 bg-accent/5 px-4 py-3 text-sm text-accent-hi">
+          Historique volumineux : cette page charge les {formatNumber(TRADES_WINDOW, 0)} trades les plus récents. Les filtres et
+          les totaux ne portent que sur cette fenêtre.
+        </p>
+      )}
+
       <Card className="mb-5 space-y-4 p-4">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-12">
           <div className="col-span-2 md:col-span-3">
@@ -342,6 +363,7 @@ export default function TradesPage() {
           <FilterChips label="Résultat" options={OUTCOME_CHIPS} value={query.outcome} onChange={(outcome) => setQuery({ outcome })} />
           <FilterChips label="Sens" options={SIDE_CHIPS} value={query.side} onChange={(side) => setQuery({ side })} />
           <FilterChips label="Plan" options={PLAN_CHIPS} value={query.plan} onChange={(plan) => setQuery({ plan })} />
+          <FilterChips label="Statut" options={STATE_CHIPS} value={query.state} onChange={(state) => setQuery({ state })} />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
@@ -396,7 +418,7 @@ export default function TradesPage() {
           {filtersActive && (
             <button
               type="button"
-              onClick={() => setQuery({ account: 'all', outcome: 'all', side: 'all', plan: 'all', q: '', from: '', to: '' })}
+              onClick={() => setQuery({ account: 'all', outcome: 'all', side: 'all', plan: 'all', state: 'all', q: '', from: '', to: '' })}
               className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted transition-colors hover:bg-surface-2 hover:text-fg"
             >
               <X className="h-3.5 w-3.5" aria-hidden />
@@ -503,16 +525,19 @@ export default function TradesPage() {
                         </td>
                         <td className={cn('whitespace-nowrap text-fg-2', cell)}>{formatDateTime(t.opened_at)}</td>
                         {show('account') && <td className={cn('max-w-40 truncate text-muted', cell)}>{account?.name ?? '—'}</td>}
-                        <td className={cell}>
-                          <button
-                            type="button"
-                            aria-haspopup="dialog"
-                            aria-label={`Voir le détail du trade ${t.instrument}, ${formatDateTime(t.opened_at)}`}
-                            onClick={() => setOpenTrade(t.id)}
-                            className="rounded font-medium text-fg transition-colors hover:text-accent"
-                          >
-                            {t.instrument}
-                          </button>
+                        <td className={cn(cell, 'whitespace-nowrap')}>
+                          <span className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              aria-haspopup="dialog"
+                              aria-label={`Voir le détail du trade ${t.instrument}, ${formatDateTime(t.opened_at)}`}
+                              onClick={() => setOpenTrade(t.id)}
+                              className="rounded font-medium text-fg transition-colors hover:text-accent"
+                            >
+                              {t.instrument}
+                            </button>
+                            {isOpen(t) && <Badge tone="info">Ouverte</Badge>}
+                          </span>
                         </td>
                         {show('side') && (
                           <td className={cell}>
@@ -559,14 +584,17 @@ export default function TradesPage() {
                   <tr>
                     <td className={firstCell} />
                     <th scope="row" className={cn('text-left font-semibold text-fg', cell)}>
-                      Total · {stats.count} trade(s)
+                      Total · {sorted.length} trade(s)
+                      {openRows > 0 && <span className="ml-1.5 font-normal text-muted">dont {openRows} ouverte(s)</span>}
                     </th>
                     {show('account') && <td className={cell} />}
                     <td className={cell} />
                     {show('side') && <td className={cell} />}
                     {show('size') && <td className={cell} />}
                     <td className={cn('text-right', cell)}>
-                      <PnlAmount value={stats.netPnl} currency={currency} />
+                      <span title="Somme des lignes affichées ; pour une position ouverte, c’est son P&L flottant.">
+                        <PnlAmount value={shownPnl} currency={currency} />
+                      </span>
                     </td>
                     {show('r') && <td className={cn('whitespace-nowrap text-right tabular-nums text-fg-2', cell)} title="R moyen des trades avec risque renseigné">{formatR(stats.avgR)}</td>}
                     {show('setup') && <td className={cell} />}
@@ -599,6 +627,7 @@ export default function TradesPage() {
                     <span className="mt-0.5 block truncate text-xs text-muted">
                       {formatDateTime(t.opened_at)} · {account?.name ?? '—'}
                       {t.setup ? ` · ${t.setup}` : ''}
+                      {isOpen(t) ? ' · position ouverte' : ''}
                     </span>
                   </button>
                   <PnlAmount value={t.net_pnl} currency={account?.currency ?? 'USD'} className="shrink-0 text-right font-semibold" />

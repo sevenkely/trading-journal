@@ -1,5 +1,5 @@
 import { dayKey } from './format';
-import { tradeTime } from './metrics';
+import { isOpen, tradeTime } from './metrics';
 import { newId } from './utils';
 import type { Trade } from './types';
 
@@ -13,6 +13,8 @@ export const SIDES = ['all', 'long', 'short'] as const;
 export type Side = (typeof SIDES)[number];
 export const PLANS = ['all', 'yes', 'no'] as const;
 export type PlanFilter = (typeof PLANS)[number];
+export const STATES = ['all', 'open', 'closed'] as const;
+export type StateFilter = (typeof STATES)[number];
 export const SORT_KEYS = ['opened', 'instrument', 'size', 'pnl', 'r', 'setup'] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 export const DIRS = ['asc', 'desc'] as const;
@@ -24,6 +26,8 @@ export interface TradeQuery {
   outcome: Outcome;
   side: Side;
   plan: PlanFilter;
+  /** open = positions encore ouvertes (P&L flottant), closed = trades clôturés */
+  state: StateFilter;
   q: string;
   /** Dates au format AAAA-MM-JJ, jour de trading dans le fuseau du navigateur ; vide = pas de borne. */
   from: string;
@@ -38,6 +42,7 @@ export const DEFAULT_QUERY: TradeQuery = {
   outcome: 'all',
   side: 'all',
   plan: 'all',
+  state: 'all',
   q: '',
   from: '',
   to: '',
@@ -64,6 +69,7 @@ export function parseTradeQuery(params: URLSearchParams): TradeQuery {
     outcome: oneOf(params.get('outcome'), OUTCOMES, DEFAULT_QUERY.outcome),
     side: oneOf(params.get('side'), SIDES, DEFAULT_QUERY.side),
     plan: oneOf(params.get('plan'), PLANS, DEFAULT_QUERY.plan),
+    state: oneOf(params.get('state'), STATES, DEFAULT_QUERY.state),
     q: params.get('q') ?? '',
     from: date('from'),
     to: date('to'),
@@ -81,6 +87,7 @@ export function writeTradeQuery(prev: URLSearchParams, query: TradeQuery): URLSe
     ['outcome', query.outcome, DEFAULT_QUERY.outcome],
     ['side', query.side, DEFAULT_QUERY.side],
     ['plan', query.plan, DEFAULT_QUERY.plan],
+    ['state', query.state, DEFAULT_QUERY.state],
     ['q', query.q, DEFAULT_QUERY.q],
     ['from', query.from, DEFAULT_QUERY.from],
     ['to', query.to, DEFAULT_QUERY.to],
@@ -112,6 +119,8 @@ export function filterTrades(trades: readonly Trade[], query: TradeQuery, tz: st
     if (query.side !== 'all' && t.direction !== query.side) return false;
     if (query.plan === 'yes' && t.plan_respected !== true) return false;
     if (query.plan === 'no' && t.plan_respected !== false) return false;
+    if (query.state === 'open' && !isOpen(t)) return false;
+    if (query.state === 'closed' && isOpen(t)) return false;
     if (q && !`${t.instrument} ${t.setup ?? ''} ${t.tags.join(' ')}`.toLowerCase().includes(q)) return false;
     if (query.from || query.to) {
       const day = dayKey(tradeTime(t), tz);

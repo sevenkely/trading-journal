@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   breakdown,
   computeStats,
+  dailyMap,
   equitySeries,
+  floatingPnl,
+  isOpen,
   sessionForDate,
   sortByTradeTime,
+  splitTrades,
   weekdayOf,
 } from './metrics';
 import { makeTrade } from '../test/fixtures';
@@ -128,5 +132,40 @@ describe('séries et regroupements', () => {
 
     const withEmpty = breakdown(trades, (t) => t.emotions_before);
     expect(withEmpty.map((r) => r.key)).toContain('Non renseigné');
+  });
+});
+
+describe('positions ouvertes (P&L flottant)', () => {
+  const open = (id: string, pnl: number) => makeTrade({ id, gross_pnl: pnl, closed_at: null });
+
+  it('sépare les positions ouvertes des trades clôturés', () => {
+    const trades = [makeTrade({ id: 'c', gross_pnl: 100, closed_at: at(9) }), open('o', -30)];
+    const { realized, open: opened } = splitTrades(trades);
+    expect(realized.map((t) => t.id)).toEqual(['c']);
+    expect(opened.map((t) => t.id)).toEqual(['o']);
+    expect(floatingPnl(trades)).toBe(-30);
+    expect(isOpen(trades[0])).toBe(false);
+    expect(isOpen(trades[1])).toBe(true);
+  });
+
+  it('exclut le flottant des statistiques réalisées', () => {
+    const trades = [
+      makeTrade({ id: 'c1', gross_pnl: 200, closed_at: at(9) }),
+      makeTrade({ id: 'c2', gross_pnl: -50, closed_at: at(10) }),
+      open('o', -500),
+    ];
+    const stats = computeStats(trades, 'UTC');
+    expect(stats.count).toBe(2);
+    expect(stats.netPnl).toBe(150);
+    expect(stats.maxDrawdown).toBe(50);
+    expect(stats.wins).toBe(1);
+    expect(stats.losses).toBe(1);
+  });
+
+  it('exclut le flottant de la courbe d’équité et du calendrier', () => {
+    const trades = [makeTrade({ id: 'c', gross_pnl: 100, closed_at: at(9) }), open('o', -40)];
+    const curve = equitySeries(trades, 1000);
+    expect(curve.map((p) => p.equity)).toEqual([1000, 1100]);
+    expect([...dailyMap(trades, 'UTC').values()]).toEqual([{ pnl: 100, count: 1 }]);
   });
 });

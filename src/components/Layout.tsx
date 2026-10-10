@@ -38,7 +38,7 @@ const NAV: NavEntry[] = [
   { to: '/trades', label: 'Trades', short: 'Trades', icon: ListOrdered, end: false },
   { to: '/journal', label: 'Journal', short: 'Journal', icon: BookOpen, end: false },
   { to: '/analyse', label: 'Analyse', short: 'Analyse', icon: BarChart3, end: false },
-  { to: '/bilan', label: 'Bilan de la semaine', short: 'Bilan', icon: CalendarDays, end: false },
+  { to: '/bilan', label: 'Bilan', short: 'Bilan', icon: CalendarDays, end: false },
   { to: '/import', label: 'Import', short: 'Import', icon: Upload, end: false },
   { to: '/parametres', label: 'Paramètres', short: 'Réglages', icon: Settings, end: false },
 ];
@@ -54,8 +54,8 @@ function Brand() {
     <Link to="/" className="flex items-center gap-3">
       <LogoMark size="md" animate />
       <span className="leading-tight">
-        <span className="block text-[15px] font-semibold tracking-tight text-fg">Trading Journal</span>
-        <span className="block text-[11px] text-muted">Prop firm &amp; compte perso</span>
+        <span className="block font-serif text-lg leading-none tracking-tight text-fg">Seven Journal</span>
+        <span className="mt-0.5 block text-[11px] text-muted">Prop firm &amp; compte perso</span>
       </span>
     </Link>
   );

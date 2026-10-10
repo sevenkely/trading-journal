@@ -1,6 +1,7 @@
 import type { Account, Trade } from './types';
 import { dayKey } from './format';
-import { sortByTradeTime, tradeTime } from './metrics';
+import { isOpen, sortByTradeTime, tradeTime } from './metrics';
+import { round2 } from './utils';
 
 export type Level = 'ok' | 'warning' | 'danger' | 'breached';
 
@@ -22,7 +23,13 @@ export interface Gauge {
 }
 
 export interface RuleReport {
+  /** Équité réalisée (solde initial + P&L clôturé) */
   equity: number;
+  /** Équité si toutes les positions ouvertes étaient clôturées maintenant */
+  equityWithFloating: number;
+  /** P&L net flottant des positions encore ouvertes (0 s'il n'y en a aucune) */
+  floatingPnl: number;
+  openCount: number;
   netPnl: number;
   todayPnl: number;
   peak: number;
@@ -63,12 +70,18 @@ export function hasAnyRule(account: Account): boolean {
 
 /**
  * Évalue les règles d'un compte (perte journalière, drawdown, objectif, jours minimum, cohérence).
- * Basé sur le P&L réalisé : le P&L flottant des positions ouvertes n'est pas pris en compte.
+ *
+ * Les mesures de performance (P&L du jour, équité, jours de trading, cohérence) ne portent que sur
+ * le **réalisé**. En revanche, les limites de **risque** (perte journalière et drawdown) intègrent
+ * le **P&L flottant** des positions encore ouvertes : c'est la lecture prudente, celle qui protège
+ * le compte si la position se clôture au prix actuel. Toute exposition ouverte est comptée dans la
+ * journée en cours, même si la position a été ouverte la veille.
  */
 export function evaluateAccount(account: Account, trades: Trade[], now: Date = new Date()): RuleReport {
   const initial = account.initial_balance;
   const tz = account.day_timezone || 'UTC';
-  const sorted = sortByTradeTime(trades);
+  const realized = sortByTradeTime(trades.filter((t) => !isOpen(t)));
+  const openPositions = trades.filter(isOpen);
   const today = dayKey(now, tz);
 
   let netPnl = 0;
@@ -77,7 +90,7 @@ export function evaluateAccount(account: Account, trades: Trade[], now: Date = n
   let peak = initial;
   const perDay = new Map<string, number>();
 
-  for (const t of sorted) {
+  for (const t of realized) {
     netPnl += t.net_pnl;
     cumulative += t.net_pnl;
     peak = Math.max(peak, cumulative);
@@ -86,7 +99,9 @@ export function evaluateAccount(account: Account, trades: Trade[], now: Date = n
     if (day === today) todayPnl += t.net_pnl;
   }
 
+  const floatingPnl = round2(openPositions.reduce((sum, t) => sum + t.net_pnl, 0));
   const equity = initial + netPnl;
+  const equityWithFloating = round2(equity + floatingPnl);
   const tradingDays = perDay.size;
   const dailyLimit = resolveAmount(account.daily_loss_amount, account.daily_loss_pct, initial);
   const maxLimit = resolveAmount(account.max_loss_amount, account.max_loss_pct, initial);
@@ -97,7 +112,8 @@ export function evaluateAccount(account: Account, trades: Trade[], now: Date = n
   let floor: number | null = null;
 
   if (dailyLimit !== null) {
-    const used = Math.max(0, -todayPnl);
+    // Perte du jour réalisée + exposition ouverte : la limite journalière se lit au pire du moment
+    const used = Math.max(0, -(todayPnl + floatingPnl));
     const ratio = used / dailyLimit;
     gauges.push({
       key: 'daily',
@@ -116,7 +132,7 @@ export function evaluateAccount(account: Account, trades: Trade[], now: Date = n
     const trailing = account.drawdown_type === 'trailing';
     // Trailing : le seuil suit le plus haut de l'équité, mais s'arrête au solde initial.
     floor = trailing ? Math.min(peak - maxLimit, initial) : initial - maxLimit;
-    const remaining = equity - floor;
+    const remaining = equityWithFloating - floor;
     const used = Math.max(0, maxLimit - remaining);
     const ratio = used / maxLimit;
     gauges.push({
@@ -200,8 +216,18 @@ export function evaluateAccount(account: Account, trades: Trade[], now: Date = n
 
   const overall = gauges.reduce<Level>((acc, g) => (RANK[g.level] > RANK[acc] ? g.level : acc), 'ok');
 
+  if (openPositions.length > 0) {
+    const plural = openPositions.length > 1 ? 's' : '';
+    alerts.push(
+      `${openPositions.length} position${plural} ouverte${plural} : P&L flottant ${floatingPnl >= 0 ? '+' : ''}${floatingPnl.toFixed(2)} inclus dans les limites de risque`,
+    );
+  }
+
   return {
     equity,
+    equityWithFloating,
+    floatingPnl,
+    openCount: openPositions.length,
     netPnl,
     todayPnl,
     peak,
