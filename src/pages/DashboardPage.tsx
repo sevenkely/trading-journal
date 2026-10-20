@@ -11,7 +11,7 @@ import { dailyBars, type DayBar } from '../lib/chartData';
 import { computeStats, dailyMap, floatingPnl, isOpen, sortByTradeTime, tradeTime } from '../lib/metrics';
 import { monthDays, shiftMonthKey } from '../lib/patterns';
 import { evaluateAccount, hasAnyRule, resolveAmount } from '../lib/rules';
-import { capFirst, dayKey, formatDate, formatDateTime, formatMoney, formatPercent, formatProfitFactor, formatR, signClass } from '../lib/format';
+import { capFirst, dayKey, formatDate, formatDateTime, formatMoney, formatPercent, formatProfitFactor, formatR } from '../lib/format';
 import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE } from '../lib/constants';
 import { loadDemoData } from '../lib/demoData';
 import type { AccountReport } from '../lib/alerts';
@@ -22,7 +22,22 @@ import { RuinPanel } from '../components/charts/RuinPanel';
 import { TodayPanel } from '../components/TodayPanel';
 import { LEVEL_UI, RuleCard } from '../components/RuleCard';
 import { errorMessage, useToast } from '../components/Toast';
-import { Badge, Button, Card, CountUp, EmptyState, PageHeader, ProgressBar, PnlAmount, Select, SectionTitle, buttonStyles, cn } from '../components/ui';
+import {
+  Badge,
+  Button,
+  CountUp,
+  EmptyState,
+  Figure,
+  LedgerRow,
+  PageHeader,
+  Panel,
+  PnlAmount,
+  Select,
+  TickRail,
+  buttonStyles,
+  cn,
+  type RailTone,
+} from '../components/ui';
 
 /**
  * Section du tableau de bord : un titre serif, une phrase, un filet. Le tableau de bord se lit
@@ -40,28 +55,12 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
-/** Tuile de la ligne KPI : le libellé se retourne sur deux lignes au lieu d’être tronqué (il reste lisible en entier). */
-function Kpi({ label, value, sub, valueClass }: { label: string; value: ReactNode; sub?: ReactNode; valueClass?: string }) {
-  return (
-    <div className="min-w-0 bg-surface p-4 md:p-5">
-      <div className="min-h-[2lh] text-[13px] leading-snug text-muted">{label}</div>
-      <div className={cn('mt-1.5 whitespace-nowrap text-xl font-semibold tabular-nums tracking-tight 2xl:text-2xl', valueClass ?? 'text-fg')}>
-        {value}
-      </div>
-      {sub && <div className="mt-1.5 text-xs leading-snug text-muted">{sub}</div>}
-    </div>
-  );
-}
-
-/** Chiffre du bilan mensuel, sous la courbe : plus compact qu’une tuile KPI, sans cadre. */
-function MonthStat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[13px] leading-snug text-muted">{label}</div>
-      <div className="mt-1.5 whitespace-nowrap text-lg font-semibold tabular-nums tracking-tight text-fg">{value}</div>
-      {sub && <div className="mt-1 text-xs leading-snug text-muted">{sub}</div>}
-    </div>
-  );
+/** Teinte de la réglette du respect du plan : la discipline se lit aussi à l'œil, le chiffre reste écrit. */
+function planTone(rate: number | null): RailTone {
+  if (rate === null) return 'accent';
+  if (rate >= 80) return 'gain';
+  if (rate >= 60) return 'accent';
+  return 'danger';
 }
 
 export default function DashboardPage() {
@@ -282,20 +281,17 @@ export default function DashboardPage() {
         title="Performance"
         description="Depuis le début du périmètre affiché. Les positions ouvertes n’entrent pas dans ces chiffres : seules leurs limites de risque les voient."
       >
-        {/* Ligne KPI : chiffres clés en police sans, à chiffres tabulaires */}
+        {/* Relevé des chiffres clés : libellé en petites capitales, figure monospace alignée en colonne */}
         <section
           aria-label="Indicateurs clés"
-          className="stagger grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line shadow-card min-[768px]:grid-cols-3 min-[1400px]:grid-cols-6"
+          className="stagger grid grid-cols-2 gap-px overflow-hidden rounded-card border border-line bg-line min-[768px]:grid-cols-3 min-[1400px]:grid-cols-6"
         >
-          <Kpi
+          <Figure
+            className="bg-surface"
             label="P&L net"
-            value={
-              <CountUp
-                value={stats.netPnl}
-                format={(v) => formatMoney(v, currency, true)}
-                className={cn('block', stats.count > 0 ? signClass(stats.netPnl) : 'text-muted')}
-              />
-            }
+            size="lg"
+            tone={stats.count === 0 ? 'muted' : stats.netPnl > 0 ? 'gain' : stats.netPnl < 0 ? 'loss' : 'neutral'}
+            value={<CountUp value={stats.netPnl} format={(v) => formatMoney(v, currency, true)} className="block" />}
             sub={
               <>
                 Brut {formatMoney(stats.grossPnl, currency, true)} · frais {formatMoney(stats.fees, currency)}
@@ -308,24 +304,33 @@ export default function DashboardPage() {
               </>
             }
           />
-          <Kpi
+          <Figure
+            className="bg-surface"
             label="Taux de réussite"
             value={formatPercent(stats.winRate, 0)}
             sub={`${stats.wins} gagnant(s) · ${stats.losses} perdant(s)`}
           />
-          <Kpi label="Profit factor" value={formatProfitFactor(stats.profitFactor)} sub="Gains bruts ÷ pertes brutes" />
-          <Kpi
+          <Figure
+            className="bg-surface"
+            label="Profit factor"
+            value={formatProfitFactor(stats.profitFactor)}
+            sub="Gains bruts ÷ pertes brutes"
+          />
+          <Figure
+            className="bg-surface"
             label="Espérance / trade"
             value={<PnlAmount value={stats.expectancy} currency={currency} />}
             sub={stats.avgR === null ? 'R : risque non renseigné' : `soit ${formatR(stats.avgR)} par trade`}
           />
-          <Kpi
+          <Figure
+            className="bg-surface"
             label="Drawdown réalisé (historique)"
+            tone={stats.maxDrawdown > 0 ? 'loss' : 'neutral'}
             value={formatMoney(stats.maxDrawdown, currency)}
-            valueClass={stats.maxDrawdown > 0 ? 'text-loss' : undefined}
             sub="Plus forte baisse depuis le départ"
           />
-          <Kpi
+          <Figure
+            className="bg-surface"
             label="Meilleur jour"
             value={bestDay ? <PnlAmount value={bestDay.pnl} currency={currency} /> : '—'}
             sub={bestDay ? `${bestDay.label} · ${bestDay.count} trade(s)` : 'Aucune journée'}
@@ -338,36 +343,50 @@ export default function DashboardPage() {
             <EquityPanel key={scope} trades={scopeTrades} startingBalance={startingBalance} currency={currency} rule={rule} />
 
             {/* Le mois en cours sous la courbe : la colonne se remplit au lieu de laisser un vide à côté de la liste des trades */}
-            <Card className="flex flex-1 flex-col p-5">
-              <SectionTitle
-                title="Bilan du mois"
-                description={`${monthLabel} · du 1er au ${formatDate(`${today}T12:00:00Z`, { day: 'numeric', timeZone: 'UTC' })}.`}
-                action={
-                  <Link
-                    to="/bilan?periode=mois"
-                    className="whitespace-nowrap text-xs font-medium text-accent transition-colors hover:text-accent-hi"
-                  >
-                    Ouvrir le bilan →
-                  </Link>
-                }
-              />
-              <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
-                <MonthStat
+            <Panel
+              className="flex flex-1 flex-col"
+              eyebrow={monthLabel}
+              title="Bilan du mois"
+              description={`Du 1er au ${formatDate(`${today}T12:00:00Z`, { day: 'numeric', timeZone: 'UTC' })}.`}
+              action={
+                <Link
+                  to="/bilan?periode=mois"
+                  className="whitespace-nowrap text-xs font-medium text-accent transition-colors hover:text-accent-hi"
+                >
+                  Ouvrir le bilan →
+                </Link>
+              }
+              bodyClassName="flex flex-1 flex-col px-0 py-0"
+            >
+              <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-4">
+                <Figure
+                  className="bg-surface"
                   label="P&L net"
                   value={<PnlAmount value={monthStats.netPnl} currency={currency} />}
                   sub={`Mois préc. ${formatMoney(previousPnl, currency, true)}`}
                 />
-                <MonthStat
+                <Figure
+                  className="bg-surface"
                   label="Trades"
                   value={monthStats.count}
                   sub={`${monthStats.wins} G · ${monthStats.losses} P · ${monthStats.breakeven} BE`}
                 />
-                <MonthStat label="Réussite" value={formatPercent(monthStats.count > 0 ? monthStats.winRate : null)} sub="Trades décidés" />
-                <MonthStat label="Jours tradés" value={`${tradedDays.length} / ${month.length}`} sub="Depuis le 1er du mois" />
+                <Figure
+                  className="bg-surface"
+                  label="Réussite"
+                  value={formatPercent(monthStats.count > 0 ? monthStats.winRate : null)}
+                  sub="Trades décidés"
+                />
+                <Figure
+                  className="bg-surface"
+                  label="Jours tradés"
+                  value={`${tradedDays.length} / ${month.length}`}
+                  sub="Depuis le 1er du mois"
+                />
               </div>
 
               {monthBest && monthWorst ? (
-                <div className="mt-auto flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-4 text-xs text-muted">
+                <div className="mt-auto flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line px-5 py-3.5 text-xs text-muted">
                   <span className="flex flex-wrap items-center gap-1.5">
                     Meilleur jour <span className="text-fg-2">{dayMonthLabel(monthBest.day)}</span>
                     <PnlAmount value={monthBest.pnl} currency={currency} className="font-medium" />
@@ -378,11 +397,11 @@ export default function DashboardPage() {
                   </span>
                 </div>
               ) : (
-                <p className="mt-auto border-t border-line pt-4 text-xs text-muted">
+                <p className="mt-auto border-t border-line px-5 py-3.5 text-xs text-muted">
                   Aucun trade ce mois-ci : le bilan se remplira au premier trade clôturé.
                 </p>
               )}
-            </Card>
+            </Panel>
           </div>
 
           <div className="stagger flex min-w-0 flex-col gap-4 lg:col-span-4">
@@ -392,58 +411,76 @@ export default function DashboardPage() {
               currencyOf={(id) => accountById.get(id)?.currency ?? DEFAULT_CURRENCY}
             />
 
-            <Card className="p-5">
-              <div className="text-[13px] text-muted">Respect du plan</div>
-              <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <span className="text-3xl font-semibold tabular-nums tracking-tight text-fg">
+            <Panel eyebrow="Respect du plan" bodyClassName="px-5 py-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <span
+                  className={cn(
+                    'figure text-3xl font-semibold leading-none',
+                    stats.planRespectedRate === null ? 'text-muted' : 'text-fg',
+                  )}
+                >
                   {stats.planRespectedRate === null ? '—' : formatPercent(stats.planRespectedRate, 0)}
                 </span>
-                <span className="text-xs text-muted">des trades renseignés</span>
+                <span className="text-[11px] text-muted">des trades renseignés</span>
               </div>
-              <ProgressBar ratio={(stats.planRespectedRate ?? 0) / 100} className="bg-accent" track="mt-4 w-full" />
-              <div className="mt-3 text-xs text-muted">
-                {planYes} trade(s) dans le plan sur {planTracked} renseigné(s)
-              </div>
-            </Card>
-
-            <Card className="flex-1 p-5">
-              <SectionTitle
-                title="Derniers trades"
-                action={
-                  <Link to="/trades" className="text-xs font-medium text-accent transition-colors hover:text-accent-hi">
-                    Tout voir
-                  </Link>
+              <TickRail
+                className="mt-4"
+                ratio={(stats.planRespectedRate ?? 0) / 100}
+                ticks={10}
+                majorEvery={5}
+                tone={planTone(stats.planRespectedRate)}
+                ariaLabel={
+                  stats.planRespectedRate === null
+                    ? 'Respect du plan : aucune donnée'
+                    : `Respect du plan : ${formatPercent(stats.planRespectedRate, 0)} des trades renseignés`
+                }
+                label={
+                  <>
+                    <span>0 %</span>
+                    <span>100 %</span>
+                  </>
                 }
               />
+              <p className="mt-3 text-[11px] leading-relaxed text-muted">
+                {planYes} trade(s) dans le plan sur {planTracked} renseigné(s)
+              </p>
+            </Panel>
+
+            <Panel
+              className="flex flex-1 flex-col"
+              eyebrow="Journal"
+              title="Derniers trades"
+              action={
+                <Link to="/trades" className="text-xs font-medium text-accent transition-colors hover:text-accent-hi">
+                  Tout voir
+                </Link>
+              }
+              bodyClassName="flex flex-1 flex-col divide-y divide-line py-1.5"
+            >
               {recent.length === 0 ? (
-                <p className="text-sm text-muted">Aucun trade sur ce périmètre pour l’instant.</p>
+                <p className="py-1 text-sm text-muted">Aucun trade sur ce périmètre pour l’instant.</p>
               ) : (
-                <ul className="-my-2 divide-y divide-line">
-                  {recent.map((t) => {
-                    const account = accountById.get(t.account_id);
-                    return (
-                      <li key={t.id}>
-                        <Link
-                          to={`/trades/${t.id}`}
-                          className="-mx-2 flex items-center justify-between gap-3 rounded-xl px-2 py-3 transition-colors hover:bg-surface-2"
-                        >
-                          <span className="min-w-0">
-                            <span className="flex items-center gap-2">
-                              <span className="font-medium text-fg">{t.instrument}</span>
-                              <Badge tone={t.direction === 'long' ? 'good' : 'bad'}>{t.direction === 'long' ? 'Achat' : 'Vente'}</Badge>
-                            </span>
-                            <span className="mt-0.5 block truncate text-xs text-muted">
-                              {formatDateTime(t.opened_at)} · {account?.name ?? '—'}
-                            </span>
-                          </span>
-                          <PnlAmount value={t.net_pnl} currency={account?.currency ?? DEFAULT_CURRENCY} className="shrink-0 font-semibold" />
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <>{recent.map((t) => {
+                  const account = accountById.get(t.account_id);
+                  return (
+                    <LedgerRow
+                      key={t.id}
+                      href={`/trades/${t.id}`}
+                      label={
+                        <span className="flex items-center gap-2 font-medium text-fg">
+                          {t.instrument}
+                          <Badge tone={t.direction === 'long' ? 'good' : 'bad'}>{t.direction === 'long' ? 'Achat' : 'Vente'}</Badge>
+                        </span>
+                      }
+                      sub={`${formatDateTime(t.opened_at)} · ${account?.name ?? '—'}`}
+                      value={
+                        <PnlAmount value={t.net_pnl} currency={account?.currency ?? DEFAULT_CURRENCY} className="font-semibold" />
+                      }
+                    />
+                  );
+                })}</>
               )}
-            </Card>
+            </Panel>
           </div>
         </div>
       </Section>

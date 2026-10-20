@@ -8,6 +8,7 @@ import App from '../App';
 import { AuthProvider } from '../auth/AuthContext';
 import { ToastProvider } from '../components/Toast';
 import { PaletteProvider } from '../components/PaletteContext';
+import { formatMoney } from '../lib/format';
 import { createLocalRepo } from '../lib/localRepo';
 import { accountInput, tradeInput } from './fixtures';
 
@@ -224,6 +225,45 @@ describe('application en mode démo', () => {
     expect(created).toBeDefined();
     expect(created?.net_pnl).toBe(145);
     expect(created?.source).toBe('manual');
+  });
+
+  it('calcule un trade futures avec les constantes du contrat, pas un lot générique', async () => {
+    await seed();
+    const el = await mountAt('/trades/nouveau', 'Résultat & risque');
+    await setField(el, 'Instrument', 'NQH6');
+    await setField(el, 'Prix d’entrée', '20000');
+    await setField(el, 'Stop loss', '19995');
+    await settle();
+
+    expect(el.textContent).toContain('Calcul futures');
+    expect(el.textContent).toContain('E-mini Nasdaq-100');
+    // Le point du NQ vaut 20 $ (tick 0,25 à 5 $) : 10 000 $ × 1 % ÷ (20 ticks × 5 $) = 1 contrat
+    expect(el.textContent).toContain(formatMoney(20, 'USD'));
+    expect(el.textContent).toContain('1 contrat NQ');
+
+    await clickButton(el, 'Utiliser : 1 NQ');
+    expect((fieldByLabel(el, 'Taille') as HTMLInputElement).value).toBe('1');
+    expect((fieldByLabel(el, 'Risque prévu') as HTMLInputElement).value).toBe('100');
+
+    // P&L déduit du contrat : 10,25 points × 20 $ = 205 $
+    await setField(el, 'Prix de sortie', '20010.25');
+    await settle();
+    await clickButton(el, 'Utiliser ce P&L');
+    expect((fieldByLabel(el, 'P&L brut') as HTMLInputElement).value).toBe('205');
+
+    const created = await createLocalRepo().listTrades();
+    expect(created).toHaveLength(2);
+  });
+
+  it('n’affiche le calcul futures que pour un contrat reconnu', async () => {
+    await seed();
+    const el = await mountAt('/trades/nouveau', 'Résultat & risque');
+    expect(el.textContent).not.toContain('Calcul futures');
+    await setField(el, 'Instrument', 'EURUSD');
+    await setField(el, 'Prix d’entrée', '1.1');
+    await setField(el, 'Stop loss', '1.098');
+    await settle();
+    expect(el.textContent).not.toContain('Calcul futures');
   });
 
   it('refuse un trade sans P&L et affiche le motif', async () => {
@@ -525,6 +565,68 @@ describe('tableau des trades : URL, tri et ajout rapide', () => {
     });
     await settle();
     expect(el.querySelector('th[aria-sort="ascending"]')?.textContent).toContain('P&L net');
+  });
+
+  /** Champ d’un panneau, repéré par le libellé exact de son étiquette. */
+  function fieldIn(scope: HTMLElement, label: string): HTMLInputElement {
+    const found = [...scope.querySelectorAll('label')].find(
+      (l) => (l.querySelector('span')?.textContent ?? '').trim() === label,
+    );
+    const field = found?.querySelector('input') as HTMLInputElement | null | undefined;
+    if (!field) throw new Error(`Champ introuvable : ${label}`);
+    return field;
+  }
+
+  it('calcule la taille d’un future dans l’ajout rapide et l’enregistre', async () => {
+    await seed();
+    const el = await mountAt('/trades', 'EURUSD');
+    await act(async () => {
+      buttonIn(el, 'Ajout rapide')?.click();
+    });
+    await settle();
+    const dialog = sheet() as HTMLElement;
+    // Aucun autre instrument n’affiche le calcul : il apparaît avec un contrat reconnu
+    expect(dialog.textContent).not.toContain('Calcul futures');
+
+    await act(async () => {
+      setField(dialog.querySelector<HTMLInputElement>('input[placeholder="EURUSD, NQ, XAUUSD…"]') as HTMLInputElement, 'NQH6');
+    });
+    await settle();
+    expect(dialog.textContent).toContain('Calcul futures');
+    expect(dialog.textContent).toContain('E-mini Nasdaq-100');
+
+    await act(async () => {
+      setField(fieldIn(dialog, 'Entrée'), '20000');
+    });
+    await act(async () => {
+      setField(fieldIn(dialog, 'Stop'), '19995');
+    });
+    await settle();
+    // 10 000 $ × 1 % = 100 $ ; stop à 5 points = 20 ticks × 5 $ → 1 contrat NQ
+    expect(dialog.textContent).toContain('1 contrat NQ');
+
+    await act(async () => {
+      buttonIn(dialog, 'Utiliser : 1 NQ')?.click();
+    });
+    await settle();
+    expect(fieldIn(dialog, 'Contrats').value).toBe('1');
+    expect(fieldIn(dialog, 'Risque').value).toBe('100');
+
+    await act(async () => {
+      setField(dialog.querySelector<HTMLInputElement>('input[placeholder="ex. 150 ou -80"]') as HTMLInputElement, '125');
+    });
+    await act(async () => {
+      buttonIn(dialog, 'Ajouter')?.click();
+    });
+    await settle();
+    expect(sheet()).toBeNull();
+
+    const created = (await createLocalRepo().listTrades()).find((t) => t.instrument === 'NQH6');
+    expect(created).toBeDefined();
+    expect(created?.size).toBe(1);
+    expect(created?.entry_price).toBe(20_000);
+    expect(created?.stop_loss).toBe(19_995);
+    expect(created?.risk_amount).toBe(100);
   });
 
   it('valide puis ajoute un trade depuis « Ajout rapide », Échap ferme la fenêtre', async () => {

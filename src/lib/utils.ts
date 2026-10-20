@@ -3,6 +3,14 @@ export function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+/** Nombre saisi dans un champ (virgule décimale acceptée) ; null si vide ou invalide. */
+export function numberOrNull(value: string): number | null {
+  const cleaned = value.replace(',', '.').trim();
+  if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 /**
  * UUID v4 (format attendu par les colonnes uuid de Postgres).
  * crypto.randomUUID n'existe pas hors HTTPS ou localhost : on passe alors par getRandomValues, disponible partout.

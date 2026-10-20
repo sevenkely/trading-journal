@@ -3,8 +3,16 @@ import { CalendarDays, CheckCircle2, Circle, Flame } from 'lucide-react';
 import type { Gauge } from '../lib/rules';
 import { MOOD_LABELS } from '../lib/constants';
 import { capFirst, formatDate, formatMoney, formatPercent } from '../lib/format';
-import { Badge, Card, PnlAmount, ProgressBar, SectionTitle, cn } from './ui';
+import { Badge, Card, Eyebrow, PnlAmount, ProgressBar, SectionTitle, TickRail, cn, type RailTone } from './ui';
 import { LEVEL_UI } from './RuleCard';
+
+/** Même échelle de couleurs que les jauges de règles : vert dans les règles, orange puis rouge au-delà. */
+const RAIL_TONES: Record<Gauge['level'], RailTone> = {
+  ok: 'gain',
+  warning: 'accent',
+  danger: 'danger',
+  breached: 'loss',
+};
 
 /**
  * Panneau du jour : ce qui se passe maintenant, pas depuis le début du compte.
@@ -64,29 +72,29 @@ export function TodayPanel({
       />
 
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line md:grid-cols-4">
-        <div className="bg-surface-2/60 p-3.5">
-          <div className="text-xs text-muted">P&amp;L du jour</div>
-          <div className="mt-1 text-lg font-semibold tabular-nums">
+        <div className="bg-surface p-3.5">
+          <Eyebrow>P&amp;L du jour</Eyebrow>
+          <div className="figure mt-1.5 text-lg font-semibold">
             <PnlAmount value={pnlToday} currency={currency} />
           </div>
-          <div className="mt-0.5 text-xs text-muted">
+          <div className="mt-0.5 text-[11px] text-muted">
             {tradesToday} trade{tradesToday > 1 ? 's' : ''} clôturé{tradesToday > 1 ? 's' : ''}
           </div>
         </div>
 
-        <div className="bg-surface-2/60 p-3.5">
-          <div className="text-xs text-muted">Flottant</div>
-          <div className="mt-1 text-lg font-semibold tabular-nums">
+        <div className="bg-surface p-3.5">
+          <Eyebrow>Flottant</Eyebrow>
+          <div className="figure mt-1.5 text-lg font-semibold">
             {openCount === 0 ? <span className="text-muted">—</span> : <PnlAmount value={floating} currency={currency} />}
           </div>
-          <div className="mt-0.5 text-xs text-muted">
+          <div className="mt-0.5 text-[11px] text-muted">
             {openCount === 0 ? 'Aucune position ouverte' : `${openCount} position${openCount > 1 ? 's' : ''} ouverte${openCount > 1 ? 's' : ''}`}
           </div>
         </div>
 
-        <div className="bg-surface-2/60 p-3.5">
-          <div className="text-xs text-muted">{daily ? 'Marge avant limite du jour' : 'Limite journalière'}</div>
-          <div className={cn('mt-1 text-lg font-semibold tabular-nums', dailyUi && daily!.level !== 'ok' ? dailyUi.text : 'text-fg')}>
+        <div className="bg-surface p-3.5">
+          <Eyebrow>{daily ? 'Marge avant limite du jour' : 'Limite journalière'}</Eyebrow>
+          <div className={cn('figure mt-1.5 text-lg font-semibold', dailyUi && daily!.level !== 'ok' ? dailyUi.text : 'text-fg')}>
             {daily === null || daily.remaining === null ? (
               <span className="text-muted">—</span>
             ) : daily.remaining >= 0 ? (
@@ -96,21 +104,24 @@ export function TodayPanel({
             )}
           </div>
           {daily ? (
-            <ProgressBar
+            <TickRail
+              className="mt-2.5"
               ratio={daily.ratio}
-              className={cn('mt-2', dailyUi!.bar)}
-              track="w-full"
-              pulse={daily.level === 'danger' || daily.level === 'breached'}
+              ticks={8}
+              majorEvery={4}
+              height="sm"
+              tone={RAIL_TONES[daily.level]}
+              ariaLabel={`Limite de perte journalière : ${formatPercent(Math.min(100, daily.ratio * 100), 0)} consommé`}
             />
           ) : (
-            <div className="mt-0.5 text-xs text-muted">Aucune règle de perte journalière</div>
+            <div className="mt-0.5 text-[11px] text-muted">Aucune règle de perte journalière</div>
           )}
         </div>
 
-        <div className="bg-surface-2/60 p-3.5">
-          <div className="text-xs text-muted">Checklist pré-trade</div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-lg font-semibold tabular-nums text-fg">
+        <div className="bg-surface p-3.5">
+          <Eyebrow>Checklist pré-trade</Eyebrow>
+          <div className="mt-1.5 flex items-baseline gap-2">
+            <span className="figure text-lg font-semibold text-fg">
               {done}/{checklist.length}
             </span>
             {checklist.length > 0 && done === checklist.length && (
@@ -120,7 +131,7 @@ export function TodayPanel({
               </Badge>
             )}
           </div>
-          <ProgressBar ratio={checklist.length === 0 ? 0 : done / checklist.length} className="bg-accent" track="mt-2 w-full" />
+          <ProgressBar ratio={checklist.length === 0 ? 0 : done / checklist.length} className="bg-accent" track="mt-2.5 w-full" />
         </div>
       </div>
 

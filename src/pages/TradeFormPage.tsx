@@ -5,21 +5,18 @@ import { ArrowLeft, Trash2 } from 'lucide-react';
 import { useAccounts, useProfile, useRefresh, useRepo, useTrades } from '../data/hooks';
 import { useUndoableTradeDelete } from '../data/undoableDelete';
 import { EMOTIONS, MISTAKES, SESSIONS, TIMEFRAMES } from '../lib/constants';
+import { FUTURES_CONTRACTS, parseFuturesSymbol } from '../lib/futures';
 import { formatMoney, formatR, fromDateTimeLocal, toDateTimeLocal } from '../lib/format';
 import { sessionForDate } from '../lib/metrics';
-import { newId, round2 } from '../lib/utils';
+import { newId, numberOrNull, round2 } from '../lib/utils';
 import { MAX_SCREENSHOTS, createTradeWithScreenshots } from '../lib/screenshots';
 import type { Account, Direction, Trade, TradeInput } from '../lib/types';
 import { errorMessage, useToast } from '../components/Toast';
+import FuturesCalculator, { type FuturesApplyPatch } from '../components/FuturesCalculator';
 import { PendingShotThumb, ScreenshotDropzone, ShotThumb } from '../components/Screenshots';
 import { Button, Card, Chip, EmptyState, Field, Input, Loading, PageHeader, Select, SectionTitle, Textarea, buttonStyles, cn, PnlAmount } from '../components/ui';
 
-const numOrNull = (v: string): number | null => {
-  const s = v.replace(',', '.').trim();
-  if (!s) return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-};
+const numOrNull = numberOrNull;
 
 const str = (v: number | null | undefined): string => (v === null || v === undefined ? '' : String(v));
 
@@ -267,6 +264,15 @@ function TradeForm({
   const set = <K extends keyof TradeFormState>(key: K, value: TradeFormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
+  /** Remplit les champs du trade depuis le calcul futures (taille, risque, P&L brut). */
+  const applyFutures = (patch: FuturesApplyPatch) =>
+    setForm((prev) => ({
+      ...prev,
+      size: patch.size === undefined ? prev.size : String(patch.size),
+      risk_amount: patch.riskAmount === undefined ? prev.risk_amount : String(patch.riskAmount),
+      gross_pnl: patch.grossPnl === undefined ? prev.gross_pnl : String(patch.grossPnl),
+    }));
+
   const toggleIn = (key: 'emotions_before' | 'emotions_after' | 'mistakes' | 'checklist_done', value: string) =>
     setForm((prev) => {
       const list = prev[key];
@@ -306,6 +312,8 @@ function TradeForm({
   const currency = accounts.find((a) => a.id === form.account_id)?.currency ?? 'USD';
 
   const instruments = [...new Set(trades.map((t) => t.instrument))];
+  const futures = parseFuturesSymbol(form.instrument);
+  const balance = accounts.find((a) => a.id === form.account_id)?.initial_balance ?? 0;
   const setups = [...new Set(trades.map((t) => t.setup).filter((s): s is string => Boolean(s)))];
 
   return (
@@ -350,7 +358,18 @@ function TradeForm({
                 {instruments.map((i) => (
                   <option key={i} value={i} />
                 ))}
+                {FUTURES_CONTRACTS.map((c) => (
+                  <option key={c.root} value={c.root}>
+                    {c.name}
+                  </option>
+                ))}
               </datalist>
+              {futures && (
+                <span className="block text-xs text-muted">
+                  Future {futures.contract.root} · {futures.contract.name} ({futures.contract.exchange}) : le calcul se fait en
+                  contrats entiers.
+                </span>
+              )}
             </Field>
             <ChipGroup label="Sens *">
               <div className="grid w-full grid-cols-2 gap-2">
@@ -380,7 +399,7 @@ function TradeForm({
             <Field label="Clôture" hint="Laisse vide si la position est encore ouverte (non prise en compte).">
               <Input type="datetime-local" lang="fr-FR" value={form.closed_local} onChange={(e) => set('closed_local', e.target.value)} />
             </Field>
-            <Field label="Taille (lots / contrats)">
+            <Field label="Taille (lots / contrats)" hint={futures ? `Contrats entiers (${futures.contract.root}) : 0,5 n'existe pas.` : undefined}>
               <Input inputMode="decimal" value={form.size} onChange={(e) => set('size', e.target.value)} placeholder="1" />
             </Field>
             <Field label="Prix d’entrée">
@@ -397,6 +416,19 @@ function TradeForm({
             </Field>
           </div>
         </Card>
+
+        <FuturesCalculator
+          instrument={form.instrument}
+          balance={balance}
+          currency={currency}
+          direction={form.direction}
+          entry={form.entry_price}
+          stop={form.stop_loss}
+          takeProfit={form.take_profit}
+          exit={form.exit_price}
+          size={form.size}
+          onApply={applyFutures}
+        />
 
         <ScreenshotsPanel trade={trade} pending={shots} onAdd={addShots} onRemovePending={removeShot} />
 

@@ -90,6 +90,12 @@ Avant chaque import, l’aperçu affiche les trades à importer, les doublons ig
 - **Surtrading** : plus de 4 trades par jour sur un même compte, dans le fuseau de ce compte.
 - **Prévision d’objectif** : reste à atteindre ÷ P&L moyen par jour de trading sur les 30 derniers jours, converti en jours ouvrés (lundi à vendredi, sans calendrier de jours fériés). Elle suppose que le rythme récent se maintient.
 - **Bilan** : la semaine va du lundi au dimanche, le mois se découpe en semaines civiles du lundi au dimanche (tronquées au début et à la fin du mois), et chaque trade compte dans la journée de son propre compte.
+- **Futures** : le calcul ne se fait ni en lots ni en pips mais **par contrat**, avec les constantes du marché (`src/lib/futures.ts`). Pour chaque contrat : `valeurdutick / tailletick` donne la valeur d'un point (NQ : 5 / 0,25 = 20 $ ; ES : 12,50 / 0,25 = 50 $ ; GC : 10 / 0,10 = 100 $ ; CL : 10 / 0,01 = 1 000 $).
+  - **P&L brut** = mouvement en points × sens du trade × valeur du point × nombre de contrats (le mouvement en ticks s'affiche à côté).
+  - **Taille** : `contrats = arrondi_bas(risque visé ÷ (distance au stop traduite en ticks × valeur du tick))`. Un contrat ne se fractionne pas : 0,5 contrat n'existe pas, et on n'arrondit jamais au-dessus du risque visé.
+  - **Micro** : quand le risque visé ne couvre pas un contrat plein, le repli sur le micro est proposé (MES, MNQ, MGC, SIL, MCL…), au prorata du même stop.
+  - **Symboles** : racine seule (`NQ`), échéance (`NQH6`, `NQZ2026`, `NQ 03-26`) ou contrat continu (`@NQ1!`, `NQ=F`). « SILVER » ou « BTCUSD » ne sont pas confondus avec des contrats.
+  - Les valeurs de tick sont celles des contrats américains (CME, CBOT, COMEX, NYMEX), libellées en USD : à recouper avec la fiche de ton broker si elle diffère.
 - Les heures sont saisies et affichées dans le fuseau du navigateur, puis stockées en UTC.
 
 ## Scripts
@@ -100,7 +106,7 @@ Avant chaque import, l’aperçu affiche les trades à importer, les doublons ig
 | `npm run build` | Vérification TypeScript puis build de production |
 | `npm run preview` | Prévisualisation du build |
 | `npm run typecheck` | Vérification TypeScript seule |
-| `npm test` | Tests unitaires (calculs, règles, flottant, comportements, prévision, risque de ruine, alertes, sauvegarde, fuseaux, CSV, MT5, palette), test de fumée et audit d’accessibilité (axe-core) |
+| `npm test` | Tests unitaires (calculs, règles, flottant, comportements, prévision, risque de ruine, alertes, sauvegarde, fuseaux, CSV, MT5, palette, futures), test de fumée et audit d’accessibilité (axe-core) |
 
 L’intégration continue (`.github/workflows/ci.yml`) lance le build et les tests sur chaque envoi et chaque pull request.
 
@@ -110,7 +116,7 @@ L’intégration continue (`.github/workflows/ci.yml`) lance le build et les tes
 
 ```
 src/
-  lib/          types, calculs (metrics, rules, timezone, patterns, behavior, forecast, ruin), sauvegarde (backup),
+  lib/          types, calculs (metrics, rules, timezone, patterns, behavior, forecast, ruin, futures), sauvegarde (backup),
                 alertes (alerts), imports (csv, mt5), accès aux données
                 repo.ts (contrat), supabaseRepo.ts (Supabase), localRepo.ts (mode démo)
   auth/         AuthContext (session, lien magique, mode démo)

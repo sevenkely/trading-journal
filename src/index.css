@@ -8,14 +8,21 @@
 @theme {
   --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Instrument Serif", "Instrument Sans Variable", ui-serif, Georgia, serif;
+  /* Chiffres : monospace du système (aucune dépendance). Un poste de marché compte en colonnes alignées. */
+  --font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   --color-ink: #06080c;
   --color-panel: #080b11;
   --color-surface: #0d1118;
   --color-surface-2: #121823;
   --color-surface-3: #1a2230;
+  --color-surface-4: #222c3d;
   --color-line: #161d2a;
   --color-line-2: #243043;
+  /* Filet fort : graduations des règles, séparateurs de colonnes chiffrées */
+  --color-line-3: #33415a;
+  /* Encoche des graduations (réglettes) : sombre sur la barre remplie, en thème sombre comme en thème clair */
+  --color-groove: color-mix(in oklab, var(--color-ink) 55%, transparent);
   --color-fg: #eef2f8;
   --color-fg-2: #b9c2d0;
   --color-muted: #8491a4;
@@ -29,6 +36,7 @@
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 30px 60px -40px rgb(0 0 0 / 0.9);
+  --shadow-raised: 0 1px 0 0 rgb(255 255 255 / 0.05) inset, 0 18px 36px -28px rgb(0 0 0 / 0.95);
   --radius-card: 1rem;
   --radius-control: 0.75rem;
   --shadow-overlay: 0 24px 60px -20px rgb(0 0 0 / 0.75);
@@ -74,6 +82,9 @@ h3 {
   --color-surface-3: #e5eaf1;
   --color-line: #e3e8f0;
   --color-line-2: #cbd3df;
+  --color-line-3: #a8b3c4;
+  --color-surface-4: #dde3ec;
+  --color-groove: color-mix(in oklab, var(--color-fg) 28%, transparent);
   --color-fg: #0f172a;
   --color-fg-2: #334155;
   --color-muted: #5b6678;
@@ -103,6 +114,29 @@ h3 {
   :focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
+  }
+}
+
+/*
+ * Feuille de salle : deux rôles typographiques pour la donnée.
+ * `.figure` — les chiffres, en monospace tabulaire : ils s'alignent en colonne d'une ligne à l'autre.
+ * `.eyebrow` — le libellé, en petites capitales espacées : il annonce ce que le chiffre mesure.
+ * Dans `@layer components` pour que les utilitaires Tailwind puissent encore les surcharger.
+ */
+@layer components {
+  .figure {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--color-muted);
   }
 }
 

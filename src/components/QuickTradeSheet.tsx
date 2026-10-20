@@ -6,9 +6,11 @@ import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import { useRefresh, useRepo } from '../data/hooks';
 import { formatR, fromDateTimeLocal, toDateTimeLocal } from '../lib/format';
+import { parseFuturesSymbol } from '../lib/futures';
 import { createTradeWithScreenshots } from '../lib/screenshots';
-import { round2 } from '../lib/utils';
+import { numberOrNull, round2 } from '../lib/utils';
 import type { Account, Direction, TradeInput } from '../lib/types';
+import FuturesCalculator from './FuturesCalculator';
 import { trapFocus } from './focusTrap';
 import { errorMessage, useToast } from './Toast';
 import { Button, EASE, Field, Input, PnlAmount, Select, buttonStyles, cn } from './ui';
@@ -21,13 +23,7 @@ const PLAN_CHOICES: { value: PlanChoice; label: string }[] = [
   { value: 'unknown', label: 'Non renseigné' },
 ];
 
-/** Nombre saisi avec une virgule ou un point ; vide ou invalide = null. */
-function toNumber(raw: string): number | null {
-  const value = raw.trim().replace(',', '.');
-  if (value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
+const toNumber = numberOrNull;
 
 /**
  * Ajout rapide d’un trade : bottom sheet sur mobile, boîte centrée sur ordinateur.
@@ -43,6 +39,9 @@ export function QuickTradeSheet({ accounts, defaultAccountId, onClose }: { accou
   const [instrument, setInstrument] = useState('');
   const [direction, setDirection] = useState<Direction>('long');
   const [openedLocal, setOpenedLocal] = useState(() => toDateTimeLocal(new Date().toISOString()));
+  const [entryPrice, setEntryPrice] = useState('');
+  const [stopLoss, setStopLoss] = useState('');
+  const [size, setSize] = useState('');
   const [net, setNet] = useState('');
   const [risk, setRisk] = useState('');
   const [plan, setPlan] = useState<PlanChoice>('unknown');
@@ -78,6 +77,8 @@ export function QuickTradeSheet({ accounts, defaultAccountId, onClose }: { accou
   const netValue = toNumber(net);
   const riskValue = toNumber(risk);
   const rPreview = netValue !== null && riskValue !== null && riskValue > 0 ? netValue / riskValue : null;
+  // Un future reconnu ouvre les champs qui servent au calcul de la taille (le reste du panneau ne change pas).
+  const futures = parseFuturesSymbol(instrument) !== null;
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -104,17 +105,32 @@ export function QuickTradeSheet({ accounts, defaultAccountId, onClose }: { accou
       setError('Le risque ne peut pas être négatif.');
       return;
     }
+    const entryValue = toNumber(entryPrice);
+    const stopValue = toNumber(stopLoss);
+    const sizeValue = toNumber(size);
+    if (entryValue !== null && entryValue <= 0) {
+      setError('Le prix d’entrée doit être supérieur à zéro.');
+      return;
+    }
+    if (stopValue !== null && stopValue <= 0) {
+      setError('Le stop loss doit être supérieur à zéro.');
+      return;
+    }
+    if (sizeValue !== null && sizeValue < 0) {
+      setError('La taille ne peut pas être négative.');
+      return;
+    }
     save.mutate({
       account_id: accountId,
       instrument: cleanInstrument,
       direction,
       opened_at: opened,
       closed_at: null,
-      entry_price: null,
+      entry_price: entryValue,
       exit_price: null,
-      stop_loss: null,
+      stop_loss: stopValue,
       take_profit: null,
-      size: null,
+      size: sizeValue,
       risk_amount: riskValue !== null && riskValue > 0 ? riskValue : null,
       gross_pnl: round2(netValue),
       fees: 0,
@@ -220,6 +236,35 @@ export function QuickTradeSheet({ accounts, defaultAccountId, onClose }: { accou
             <Field label="Ouverture *" hint="Heure locale de ton navigateur.">
               <Input type="datetime-local" lang="fr-FR" value={openedLocal} onChange={(e) => setOpenedLocal(e.target.value)} />
             </Field>
+            {futures && (
+              <>
+                <div className="grid grid-cols-3 gap-2.5">
+                  <Field label="Entrée">
+                    <Input inputMode="decimal" value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} />
+                  </Field>
+                  <Field label="Stop">
+                    <Input inputMode="decimal" value={stopLoss} onChange={(e) => setStopLoss(e.target.value)} />
+                  </Field>
+                  <Field label="Contrats">
+                    <Input inputMode="decimal" value={size} onChange={(e) => setSize(e.target.value)} placeholder="1" />
+                  </Field>
+                </div>
+                <FuturesCalculator
+                  variant="compact"
+                  instrument={instrument}
+                  balance={account?.initial_balance ?? 0}
+                  currency={currency}
+                  direction={direction}
+                  entry={entryPrice}
+                  stop={stopLoss}
+                  size={size}
+                  onApply={(patch) => {
+                    if (patch.size !== undefined) setSize(String(patch.size));
+                    if (patch.riskAmount !== undefined) setRisk(String(patch.riskAmount));
+                  }}
+                />
+              </>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <Field label="P&L net *" hint="Après frais. La position reste ouverte : ce montant est son P&L flottant.">
                 <Input inputMode="decimal" value={net} onChange={(e) => setNet(e.target.value)} placeholder="ex. 150 ou -80" />

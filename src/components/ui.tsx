@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { formatMoney, pnlGlyph, signClass } from '../lib/format';
 import {
   useEffect,
@@ -150,6 +151,218 @@ export function Badge({ tone = 'neutral', children, className }: { tone?: Tone; 
     >
       {children}
     </span>
+  );
+}
+
+/**
+ * Feuille de salle : la donnée se lit comme sur un relevé — un libellé en petites capitales,
+ * une figure en monospace tabulaire alignée en colonne, une note discrète sous la figure.
+ */
+export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
+  return <span className={cn('eyebrow block', className)}>{children}</span>;
+}
+
+export type FigureTone = 'neutral' | 'gain' | 'loss' | 'accent' | 'muted';
+
+const FIGURE_TONES: Record<FigureTone, string> = {
+  neutral: 'text-fg',
+  gain: 'text-gain',
+  loss: 'text-loss',
+  accent: 'text-accent-hi',
+  muted: 'text-muted',
+};
+
+/** Chiffre clé : ce que ça mesure, combien, et d'où ça vient. */
+export function Figure({
+  label,
+  value,
+  sub,
+  tone = 'neutral',
+  size = 'md',
+  className,
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  sub?: ReactNode;
+  tone?: FigureTone;
+  size?: 'md' | 'lg';
+  className?: string;
+}) {
+  return (
+    <div className={cn('min-w-0 px-4 py-4 md:px-5', className)}>
+      <Eyebrow className="min-h-[1.2em] leading-snug">{label}</Eyebrow>
+      <div
+        className={cn(
+          'figure mt-2 whitespace-nowrap font-semibold',
+          size === 'lg' ? 'text-2xl md:text-[1.7rem]' : 'text-lg md:text-xl',
+          FIGURE_TONES[tone],
+        )}
+      >
+        {value}
+      </div>
+      {sub && <div className="mt-1.5 text-[11px] leading-snug text-muted">{sub}</div>}
+    </div>
+  );
+}
+
+/**
+ * Panneau : une surface, un en-tête séparé par un filet, un corps. Remplace l'empilement
+ * de cartes autonomes — le contenu se lit d'un seul tenant, l'en-tête garde son rôle.
+ */
+export function Panel({
+  eyebrow,
+  title,
+  description,
+  action,
+  children,
+  className,
+  bodyClassName,
+  ariaLabel,
+}: {
+  eyebrow?: ReactNode;
+  title?: ReactNode;
+  description?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+  ariaLabel?: string;
+}) {
+  return (
+    <section
+      aria-label={title === undefined ? ariaLabel : undefined}
+      className={cn('overflow-hidden rounded-card border border-line bg-surface shadow-card', className)}
+    >
+      {(eyebrow || title || action) && (
+        <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-3.5">
+          <div className="min-w-0">
+            {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
+            {title && (
+              <h2 className={cn('font-serif text-xl leading-tight text-fg', eyebrow ? 'mt-1' : undefined)}>{title}</h2>
+            )}
+            {description && <p className="mt-1.5 max-w-prose text-xs leading-relaxed text-muted">{description}</p>}
+          </div>
+          {action && <div className="shrink-0">{action}</div>}
+        </header>
+      )}
+      {/* `bodyClassName` remplace le rembourrage par défaut : pas de classes Tailwind en conflit à arbitrer. */}
+      <div className={bodyClassName ?? 'px-5 py-4'}>{children}</div>
+    </section>
+  );
+}
+
+/** Ligne de relevé : libellé à gauche, figure à droite, séparée par un filet. */
+export function LedgerRow({
+  label,
+  sub,
+  value,
+  href,
+  className,
+}: {
+  label: ReactNode;
+  sub?: ReactNode;
+  value: ReactNode;
+  href?: string;
+  className?: string;
+}) {
+  const body = (
+    <>
+      <span className="min-w-0">
+        <span className="block text-[13px] text-fg-2">{label}</span>
+        {sub && <span className="mt-0.5 block truncate text-[11px] text-muted">{sub}</span>}
+      </span>
+      <span className="figure shrink-0 text-right text-sm text-fg">{value}</span>
+    </>
+  );
+  if (href) {
+    return (
+      <Link
+        to={href}
+        className={cn(
+          '-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-surface-4',
+          className,
+        )}
+      >
+        {body}
+      </Link>
+    );
+  }
+  return <div className={cn('flex items-center justify-between gap-3 py-2.5', className)}>{body}</div>;
+}
+
+export type RailTone = 'accent' | 'gain' | 'loss' | 'danger' | 'info';
+
+const RAIL_FILLS: Record<RailTone, string> = {
+  accent: 'bg-accent',
+  gain: 'bg-gain',
+  loss: 'bg-loss',
+  danger: 'bg-danger',
+  info: 'bg-info',
+};
+
+/**
+ * Réglette à crans : une échelle graduée, remplie à la valeur mesurée. La graduation est
+ * l'information — un stop à 20 ticks, un plan respecté à 76 %, une marge de perte consommée.
+ * Le chiffre exact est toujours écrit à côté : la couleur ne porte jamais l'information seule.
+ */
+export function TickRail({
+  ratio,
+  ticks = 12,
+  majorEvery = 4,
+  tone = 'accent',
+  marker = null,
+  height = 'md',
+  label,
+  ariaLabel,
+  className,
+}: {
+  /** Part remplie, de 0 à 1 (bornée). */
+  ratio: number;
+  /** Nombre de graduations dessinées. */
+  ticks?: number;
+  /** Une graduation longue tous les N crans. */
+  majorEvery?: number;
+  tone?: RailTone;
+  /** Repère vertical, de 0 à 1 (ex. la limite à ne pas dépasser). */
+  marker?: number | null;
+  height?: 'sm' | 'md';
+  label?: ReactNode;
+  ariaLabel?: string;
+  className?: string;
+}) {
+  const filled = clamp01(ratio);
+  return (
+    <div className={className}>
+      <div
+        role={ariaLabel ? 'img' : undefined}
+        aria-label={ariaLabel}
+        aria-hidden={ariaLabel ? undefined : true}
+        className={cn(
+          'relative overflow-hidden rounded-[4px] bg-surface-2/80 ring-1 ring-inset ring-line-2',
+          height === 'sm' ? 'h-3' : 'h-5',
+        )}
+      >
+        <span
+          className={cn('absolute inset-y-0 left-0 transition-[width] duration-700 ease-out-expo', RAIL_FILLS[tone])}
+          style={{ width: `${filled * 100}%` }}
+        />
+        <span className="absolute inset-0 flex items-end justify-between px-px">
+          {Array.from({ length: ticks + 1 }, (_, i) => (
+            <span
+              key={i}
+              className={cn('w-px bg-groove', i % majorEvery === 0 ? 'h-full' : 'h-1.5')}
+            />
+          ))}
+        </span>
+        {marker !== null && (
+          <span
+            className="absolute inset-y-0 w-[2px] bg-fg/80"
+            style={{ left: `calc(${clamp01(marker) * 100}% - 1px)` }}
+          />
+        )}
+      </div>
+      {label && <div className="mt-1.5 flex items-baseline justify-between gap-3 text-[11px] text-muted">{label}</div>}
+    </div>
   );
 }
 
