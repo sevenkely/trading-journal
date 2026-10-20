@@ -53,6 +53,63 @@ describe('localRepo (mode démo)', () => {
     expect(await repo.listAccounts()).toHaveLength(0);
   });
 
+  it('enregistre le dossier d’un trade : setup, thèse, images et verdict', async () => {
+    const repo = createLocalRepo();
+    const account = await repo.createAccount(accountInput());
+    const setup = await repo.createSetup({
+      name: '  Sweep  de liquidité ',
+      description: null,
+      htf: 'H4 baissier',
+      invalidation: 'Clôture au-dessus',
+      checklist: [],
+    });
+    expect(setup.name).toBe('Sweep de liquidité');
+
+    const trade = await repo.createTrade(
+      tradeInput({
+        account_id: account.id,
+        setup_id: setup.id,
+        setup: setup.name,
+        thesis: 'Sweep du low de Londres',
+        invalidation: 'Clôture H1 au-dessus',
+        verdict: 'played_out',
+        confluences: ['Biais HTF aligné'],
+        media: [{ path: 'demo/a.webp', role: 'htf', caption: 'Contexte H4' }],
+      }),
+    );
+
+    const [stored] = await repo.listTrades();
+    expect(stored.thesis).toBe('Sweep du low de Londres');
+    expect(stored.verdict).toBe('played_out');
+    expect(stored.confluences).toEqual(['Biais HTF aligné']);
+    expect(stored.media).toEqual([{ path: 'demo/a.webp', role: 'htf', caption: 'Contexte H4' }]);
+    expect(stored.setup_id).toBe(setup.id);
+
+    await repo.updateTrade(trade.id, { media: [{ path: 'demo/b.webp', role: 'ltf', caption: null }] });
+    expect((await repo.listTrades())[0].media).toHaveLength(1);
+    expect((await repo.listTrades())[0].media[0].role).toBe('ltf');
+  });
+
+  it('retire un setup de la bibliothèque sans effacer le libellé des trades', async () => {
+    const repo = createLocalRepo();
+    const account = await repo.createAccount(accountInput());
+    const setup = await repo.createSetup({
+      name: 'ORB',
+      description: null,
+      htf: null,
+      invalidation: null,
+      checklist: [],
+    });
+    await repo.createTrade(tradeInput({ account_id: account.id, setup_id: setup.id, setup: 'ORB' }));
+
+    await repo.deleteSetup(setup.id);
+
+    const [stored] = await repo.listTrades();
+    expect(stored.setup_id).toBeNull();
+    expect(stored.setup).toBe('ORB');
+    expect(await repo.listSetups()).toEqual([]);
+  });
+
   it('enregistre une seule note par date', async () => {
     const repo = createLocalRepo();
     await repo.upsertDailyNote({ date: '2026-10-09', mood: 3, rating: null, plan: 'Attendre', review: null, lessons: null });

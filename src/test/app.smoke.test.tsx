@@ -210,7 +210,7 @@ describe('application en mode démo', () => {
     await seed();
     const [trade] = await createLocalRepo().listTrades();
     const el = await mountAt(`/trades/${trade.id}`, 'Discipline & psychologie');
-    expect(el.textContent).toContain('Captures d’écran');
+    expect(el.textContent).toContain('Le dossier visuel');
   });
 
   it('enregistre un nouveau trade depuis le formulaire', async () => {
@@ -522,7 +522,7 @@ describe('détail d’un trade depuis la page Trades', () => {
   it('indique en mode démo que les captures demandent Supabase', async () => {
     await seed();
     const el = await mountAt('/trades/nouveau', 'Résultat & risque');
-    expect(el.textContent).toContain('Les captures sont disponibles lorsque la base Supabase est connectée');
+    expect(el.textContent).toContain('Les images sont disponibles lorsque la base Supabase est connectée');
     expect(el.querySelector('input[type="file"]')).toBeNull();
   });
 });
@@ -667,5 +667,103 @@ describe('tableau des trades : URL, tri et ajout rapide', () => {
     expect(sheet()).toBeNull();
     expect(document.body.textContent).toContain('GBPUSD');
     expect(document.body.textContent).toContain('Trade ajouté');
+  });
+});
+
+describe('dossier de trade : la raison d’entrer', () => {
+  beforeEach(() => localStorage.clear());
+
+  function setValue(el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, value: string) {
+    const proto =
+      el instanceof HTMLSelectElement
+        ? HTMLSelectElement.prototype
+        : el instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+    setter?.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function buttonByText(scope: ParentNode, text: string): HTMLButtonElement | undefined {
+    return [...scope.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === text);
+  }
+
+  function drawer(): HTMLElement | null {
+    return document.querySelector<HTMLElement>('[role="dialog"]');
+  }
+
+  /** Ligne du tableau des trades (le bouton de la ligne porte l’instrument comme seul texte). */
+  function rowButton(el: HTMLElement, instrument: string): HTMLButtonElement | null {
+    return (
+      [...el.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === instrument) ?? null
+    );
+  }
+
+  async function waitFor(check: () => unknown, ms = 10_000) {
+    const started = Date.now();
+    while (!check() && Date.now() - started < ms) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      });
+    }
+  }
+
+  it('crée un setup à la volée, enregistre thèse, invalidation et verdict, puis les relit dans le tiroir', async () => {
+    await seed();
+    const el = await mountAt('/trades/nouveau', 'Nouveau trade');
+
+    const instrument = el.querySelector<HTMLInputElement>('input[placeholder="EURUSD, NQ, XAUUSD…"]');
+    expect(instrument).not.toBeNull();
+    await act(async () => setValue(instrument as HTMLInputElement, 'MES'));
+    await act(async () => setValue(el.querySelector<HTMLInputElement>('input[placeholder="ex. -150 ou 320"]') as HTMLInputElement, '120'));
+
+    // Thèse et invalidation
+    const thesis = el.querySelector<HTMLTextAreaElement>('textarea[placeholder^="Ex. Sweep du low"]');
+    const invalidation = el.querySelector<HTMLTextAreaElement>('textarea[placeholder^="Ex. Clôture H1"]');
+    expect(thesis).not.toBeNull();
+    expect(invalidation).not.toBeNull();
+    await act(async () => setValue(thesis as HTMLTextAreaElement, 'Sweep du low de Londres puis retour dans la zone H1.'));
+    await act(async () => setValue(invalidation as HTMLTextAreaElement, 'Clôture H1 au-dessus de 5 210.'));
+
+    // Verdict
+    await act(async () => buttonByText(el, 'Sorti trop tôt')?.click());
+
+    // Setup créé depuis le formulaire
+    const setupSelect = [...el.querySelectorAll<HTMLSelectElement>('select')].find((s) =>
+      [...s.options].some((option) => option.value === '__new'),
+    );
+    expect(setupSelect).toBeDefined();
+    await act(async () => setValue(setupSelect as HTMLSelectElement, '__new'));
+    await settle();
+    const setupName = el.querySelector<HTMLInputElement>('input[aria-label="Nom du nouveau setup"]');
+    expect(setupName).not.toBeNull();
+    await act(async () => setValue(setupName as HTMLInputElement, 'ORB 5 min'));
+    await act(async () => buttonByText(el, 'Créer')?.click());
+    await settle();
+    expect((await createLocalRepo().listSetups()).map((s) => s.name)).toEqual(['ORB 5 min']);
+
+    await act(async () => buttonByText(el, 'Ajouter le trade')?.click());
+    // La navigation vers la liste est asynchrone : on attend la ligne, pas un texte du formulaire.
+    await waitFor(() => rowButton(el, 'MES'));
+    await settle();
+
+    const [created] = (await createLocalRepo().listTrades()).filter((t) => t.instrument === 'MES');
+    expect(created.thesis).toContain('Sweep du low');
+    expect(created.invalidation).toContain('Clôture H1');
+    expect(created.verdict).toBe('early_exit');
+    expect(created.setup).toBe('ORB 5 min');
+    expect(created.setup_id).toBeTruthy();
+
+    await act(async () => rowButton(el, 'MES')?.click());
+    await waitFor(() => drawer());
+    await settle();
+    const panel = drawer();
+    expect(panel).not.toBeNull();
+    expect(panel?.textContent).toContain('La raison d’entrer');
+    expect(panel?.textContent).toContain('Sweep du low de Londres');
+    expect(panel?.textContent).toContain('Sorti trop tôt');
+    expect(panel?.textContent).toContain('ORB 5 min');
   });
 });

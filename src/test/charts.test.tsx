@@ -83,7 +83,7 @@ function trade(i: number, closedAt: string, netPnl: number, risk: number | null 
     source: 'manual',
     external_id: null,
     import_batch_id: null,
-    screenshots: [],
+    media: [],
     created_at: closedAt,
   } as Trade;
 }

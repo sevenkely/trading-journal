@@ -1,5 +1,5 @@
 import type { Repo } from './repo';
-import type { Trade, TradeInput } from './types';
+import type { MediaRole, Trade, TradeInput, TradeMedia } from './types';
 import { newUuid } from './utils';
 
 /** Nombre maximum de captures par trade (appliqué dans l’interface ; la base ne le contrôle pas). */
@@ -81,18 +81,29 @@ export async function prepareScreenshot(file: File): Promise<File> {
   }
 }
 
+/** Une image en attente d’envoi, avec sa place dans le dossier. */
+export interface PendingMedia {
+  file: File;
+  role: MediaRole;
+  caption: string | null;
+}
+
 /**
- * Crée un trade avec ses captures. L’identifiant est choisi avant l’envoi, pour que le chemin de chaque fichier
- * contienne déjà celui du trade. Si une étape échoue, les fichiers déjà envoyés sont supprimés et l’erreur remonte.
+ * Crée un trade avec son dossier visuel. L’identifiant est choisi avant l’envoi, pour que le chemin
+ * de chaque fichier contienne déjà celui du trade. Si une étape échoue, les fichiers déjà envoyés
+ * sont supprimés et l’erreur remonte : aucun fichier orphelin, aucun trade à moitié enregistré.
  */
-export async function createTradeWithScreenshots(repo: Repo, input: TradeInput, files: File[]): Promise<Trade> {
+export async function createTradeWithMedia(repo: Repo, input: TradeInput, pending: PendingMedia[]): Promise<Trade> {
   const id = newUuid();
-  const paths: string[] = [];
+  const media: TradeMedia[] = [];
   try {
-    for (const file of files) paths.push(await repo.uploadScreenshot(id, file));
-    return await repo.createTrade(input, { id, screenshots: paths });
+    for (const item of pending) {
+      const path = await repo.uploadScreenshot(id, item.file);
+      media.push({ path, role: item.role, caption: item.caption });
+    }
+    return await repo.createTrade({ ...input, media }, { id });
   } catch (error) {
-    await Promise.allSettled(paths.map((path) => repo.deleteScreenshotFile(path)));
+    await Promise.allSettled(media.map((item) => repo.deleteScreenshotFile(item.path)));
     throw error;
   }
 }

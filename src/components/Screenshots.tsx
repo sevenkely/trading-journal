@@ -3,11 +3,115 @@ import { useQuery } from '@tanstack/react-query';
 import { ImagePlus, X } from 'lucide-react';
 import { useRepo } from '../data/hooks';
 import { MAX_SCREENSHOTS, prepareScreenshot, validateScreenshotFile } from '../lib/screenshots';
+import { MEDIA_ROLES, roleInfo } from '../lib/story';
+import type { MediaRole, TradeMedia } from '../lib/types';
 import { errorMessage } from './Toast';
-import { Button, cn } from './ui';
+import { Button, Input, cn } from './ui';
+
+/** Choix du rôle d’une image : contexte HTF, déclencheur LTF, résultat ou autre. */
+export function RolePicker({ role, onChange }: { role: MediaRole; onChange: (role: MediaRole) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1" role="group" aria-label="Rôle de l’image">
+      {MEDIA_ROLES.map((info) => (
+        <button
+          key={info.value}
+          type="button"
+          aria-pressed={role === info.value}
+          title={info.hint}
+          onClick={() => onChange(info.value)}
+          className={cn(
+            'rounded-md border px-1.5 py-1 text-[11px] font-medium transition-colors duration-150',
+            role === info.value
+              ? 'border-accent/50 bg-accent/15 text-accent-hi'
+              : 'border-line-2 bg-surface-2/60 text-muted hover:text-fg-2',
+          )}
+        >
+          {info.short}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Une image du dossier déjà envoyée, avec son rôle et sa légende modifiables. */
+export function MediaCard({
+  media,
+  onRoleChange,
+  onCaptionChange,
+  onCaptionBlur,
+  onRemove,
+  disabled = false,
+}: {
+  media: TradeMedia;
+  onRoleChange?: (role: MediaRole) => void;
+  onCaptionChange?: (caption: string) => void;
+  onCaptionBlur?: () => void;
+  onRemove?: () => void;
+  disabled?: boolean;
+}) {
+  const repo = useRepo();
+  const { data: url } = useQuery({
+    queryKey: ['screenshot', media.path],
+    queryFn: () => repo.getScreenshotUrl(media.path),
+    staleTime: 30 * 60_000,
+  });
+  return (
+    <figure className="overflow-hidden rounded-xl border border-line-2 bg-surface-2/50">
+      <div className="group relative h-32 bg-ink">
+        {url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="block h-full w-full"
+            aria-label={`Ouvrir l’image ${roleInfo(media.role).short} dans un nouvel onglet`}
+          >
+            <img
+              src={url}
+              alt={media.caption ?? `Image ${roleInfo(media.role).label}`}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+            />
+          </a>
+        ) : (
+          <div className="skeleton flex h-full items-center justify-center text-xs text-muted">Chargement…</div>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="absolute right-1.5 top-1.5 rounded-lg bg-ink/85 p-1.5 text-fg-2 transition hover:text-loss"
+            aria-label="Supprimer l’image"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        )}
+      </div>
+      <figcaption className="space-y-1.5 p-2">
+        {onRoleChange ? (
+          <RolePicker role={media.role} onChange={onRoleChange} />
+        ) : (
+          <span className="text-[11px] font-medium text-fg-2">{roleInfo(media.role).label}</span>
+        )}
+        {onCaptionChange ? (
+          <Input
+            value={media.caption ?? ''}
+            onChange={(event) => onCaptionChange(event.target.value)}
+            onBlur={onCaptionBlur}
+            placeholder="Légende (optionnel)"
+            aria-label={`Légende de l’image ${roleInfo(media.role).short}`}
+            disabled={disabled}
+            className="px-2 py-1 text-xs"
+          />
+        ) : (
+          media.caption && <p className="px-0.5 text-xs leading-relaxed text-muted">{media.caption}</p>
+        )}
+      </figcaption>
+    </figure>
+  );
+}
 
 /** Vignette d’une capture enregistrée. Sans `onRemove`, la vignette ne fait que consulter. */
-export function ShotThumb({ path, onRemove, className = 'w-44' }: { path: string; onRemove?: () => void; className?: string }) {
+export function ShotThumb({ path, onRemove, className = 'w-full' }: { path: string; onRemove?: () => void; className?: string }) {
   const repo = useRepo();
   const { data: url } = useQuery({
     queryKey: ['screenshot', path],
@@ -16,7 +120,7 @@ export function ShotThumb({ path, onRemove, className = 'w-44' }: { path: string
   });
 
   return (
-    <div className={cn('group relative h-28 max-w-full overflow-hidden rounded-xl border border-line-2 bg-ink', className)}>
+    <div className={cn('group relative h-56 max-w-full overflow-hidden rounded-xl border border-line-2 bg-ink', className)}>
       {url ? (
         <a
           href={url}
@@ -41,6 +145,51 @@ export function ShotThumb({ path, onRemove, className = 'w-44' }: { path: string
         </button>
       )}
     </div>
+  );
+}
+
+/** Une image pas encore envoyée, avec sa place dans le dossier. */
+export function PendingMediaCard({
+  url,
+  index,
+  role,
+  caption,
+  onRoleChange,
+  onCaptionChange,
+  onRemove,
+}: {
+  url: string;
+  index: number;
+  role: MediaRole;
+  caption: string;
+  onRoleChange: (role: MediaRole) => void;
+  onCaptionChange: (caption: string) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <figure className="overflow-hidden rounded-xl border border-line-2 bg-surface-2/50">
+      <div className="group relative h-32 bg-ink">
+        <img src={url} alt={`Image ${index + 1}, en attente d’enregistrement`} className="h-full w-full object-cover" />
+        <button
+          type="button"
+          onClick={onRemove}
+          className="absolute right-1.5 top-1.5 rounded-lg bg-ink/85 p-1.5 text-fg-2 transition hover:text-loss"
+          aria-label={`Retirer l’image ${index + 1}`}
+        >
+          <X className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      </div>
+      <figcaption className="space-y-1.5 p-2">
+        <RolePicker role={role} onChange={onRoleChange} />
+        <Input
+          value={caption}
+          onChange={(event) => onCaptionChange(event.target.value)}
+          placeholder="Légende (optionnel)"
+          aria-label={`Légende de l’image ${index + 1}`}
+          className="px-2 py-1 text-xs"
+        />
+      </figcaption>
+    </figure>
   );
 }
 

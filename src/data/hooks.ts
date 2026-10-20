@@ -14,6 +14,7 @@ export const queryKeys = {
   trades: ['trades'] as const,
   notes: ['notes'] as const,
   batches: ['batches'] as const,
+  setups: ['setups'] as const,
 };
 
 export function useProfile() {
@@ -46,6 +47,12 @@ export function useNotes() {
 export function useBatches() {
   const repo = useRepo();
   return useQuery({ queryKey: queryKeys.batches, queryFn: () => repo.listImportBatches() });
+}
+
+/** Bibliothèque de setups : la même liste pour le formulaire et les paramètres. */
+export function useSetups() {
+  const repo = useRepo();
+  return useQuery({ queryKey: queryKeys.setups, queryFn: () => repo.listSetups() });
 }
 
 /** Recharge toutes les données après une modification (les vues restent cohérentes). */

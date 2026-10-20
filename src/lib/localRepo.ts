@@ -8,9 +8,12 @@ import type {
   ImportBatch,
   ImportBatchInput,
   Profile,
+  Setup,
   Trade,
   TradeInput,
 } from './types';
+import { normalizeMedia } from './story';
+import { normalizeSetupName } from './setups';
 import { newId, round2 } from './utils';
 
 /** Mode démo : tout est stocké dans le localStorage du navigateur. */
@@ -31,12 +34,44 @@ function write<T>(name: string, value: T): void {
 
 const nowIso = () => new Date().toISOString();
 
+/** Le mode démo a connu des trades sans dossier : on complète les champs ajoutés depuis. */
+function normalizeTrade(trade: Trade & { screenshots?: string[] }): Trade {
+  const { screenshots, ...rest } = trade;
+  return {
+    ...rest,
+    setup_id: rest.setup_id ?? null,
+    thesis: rest.thesis ?? null,
+    invalidation: rest.invalidation ?? null,
+    verdict: rest.verdict ?? null,
+    confluences: rest.confluences ?? [],
+    media: normalizeMedia(rest.media, screenshots),
+  };
+}
+
 function buildTrade(input: TradeInput, existing?: Trade, id?: string): Trade {
-  const base = existing ?? { id: id ?? newId(), screenshots: [] as string[], created_at: nowIso() };
-  const merged = { ...base, ...input };
+  const base: Partial<Trade> & { id: string; created_at: string } =
+    existing ??
+    ({
+      id: id ?? newId(),
+      media: [],
+      setup_id: null,
+      thesis: null,
+      invalidation: null,
+      verdict: null,
+      confluences: [],
+      created_at: nowIso(),
+    } as Partial<Trade> & { id: string; created_at: string });
+  const merged = { ...base, ...input } as Trade;
   const gross = Number(merged.gross_pnl);
   const fees = Number(merged.fees);
-  return { ...merged, gross_pnl: gross, fees, net_pnl: round2(gross - fees) } as Trade;
+  return {
+    ...merged,
+    media: normalizeMedia(merged.media),
+    confluences: merged.confluences ?? [],
+    gross_pnl: gross,
+    fees,
+    net_pnl: round2(gross - fees),
+  } as Trade;
 }
 
 export function createLocalRepo(): Repo {
@@ -98,7 +133,7 @@ export function createLocalRepo(): Repo {
     },
 
     async listTrades(options) {
-      const trades = read<Trade[]>('trades', []);
+      const trades = read<Trade[]>('trades', []).map(normalizeTrade);
       const limit = options?.limit;
       if (!limit || limit <= 0 || trades.length <= limit) return trades;
       return [...trades]
@@ -108,8 +143,7 @@ export function createLocalRepo(): Repo {
 
     async createTrade(input, extra) {
       const trades = read<Trade[]>('trades', []);
-      const built = buildTrade(input, undefined, extra?.id);
-      const trade = extra?.screenshots ? { ...built, screenshots: extra.screenshots } : built;
+      const trade = buildTrade(input, undefined, extra?.id);
       write('trades', [...trades, trade]);
       return trade;
     },
@@ -166,6 +200,37 @@ export function createLocalRepo(): Repo {
       const note: DailyNote = { ...input, id: newId() };
       write('notes', [...notes, note]);
       return note;
+    },
+
+    async listSetups() {
+      return read<Setup[]>('setups', []).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    },
+
+    async createSetup(input) {
+      const setups = read<Setup[]>('setups', []);
+      const setup: Setup = { ...input, name: normalizeSetupName(input.name), id: newId(), created_at: nowIso() };
+      write('setups', [...setups, setup]);
+      return setup;
+    },
+
+    async updateSetup(id, patch) {
+      const setups = read<Setup[]>('setups', []);
+      const index = setups.findIndex((s) => s.id === id);
+      if (index < 0) throw new Error('Setup introuvable');
+      const next = { ...setups[index], ...patch };
+      const updated: Setup = { ...next, name: normalizeSetupName(next.name) };
+      setups[index] = updated;
+      write('setups', setups);
+      return updated;
+    },
+
+    async deleteSetup(id) {
+      write('setups', read<Setup[]>('setups', []).filter((s) => s.id !== id));
+      // Le libellé des trades reste : le setup disparaît de la bibliothèque, pas de l'historique.
+      write(
+        'trades',
+        read<Trade[]>('trades', []).map((t) => (t.setup_id === id ? { ...t, setup_id: null } : t)),
+      );
     },
 
     async uploadScreenshot() {

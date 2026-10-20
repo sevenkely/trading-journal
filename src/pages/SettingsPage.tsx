@@ -3,12 +3,13 @@ import { useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Download, Plus, RotateCcw, Trash2, Upload } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { useProfile, useRefresh, useRepo } from '../data/hooks';
+import { useProfile, useRefresh, useRepo, useSetups } from '../data/hooks';
 import { buildBackup, parseBackup, planRestore, restoreBackup, type BackupFile, type RestorePlan } from '../lib/backup';
 import { loadDemoData } from '../lib/demoData';
 import { dayKey, formatDateTime } from '../lib/format';
 import { CURRENCIES, DEFAULT_CHECKLIST, TIMEZONES } from '../lib/constants';
-import type { Profile } from '../lib/types';
+import { normalizeSetupName } from '../lib/setups';
+import type { Profile, SetupInput } from '../lib/types';
 import { errorMessage, useToast } from '../components/Toast';
 import { usePalette } from '../components/PaletteContext';
 import { PALETTE_LABELS, PALETTE_NAMES } from '../lib/palette';
@@ -24,7 +25,7 @@ import {
   type AlertSettings,
 } from '../lib/alerts';
 import { postAlert } from '../components/useRuleAlerts';
-import { Button, Card, Field, Input, Loading, PageHeader, Segmented, Select, SectionTitle } from '../components/ui';
+import { Badge, Button, Card, Field, Input, Loading, PageHeader, Segmented, Select, SectionTitle } from '../components/ui';
 
 export default function SettingsPage() {
   const { data: profile, isLoading } = useProfile();
@@ -290,6 +291,8 @@ function SettingsForm({ profile }: { profile: Profile }) {
           )}
         </Card>
 
+        <SetupsCard />
+
         <Card className="space-y-6 lg:col-span-2">
           <SectionTitle title="Données" description="Sauvegarde, restauration et jeu d’exemple." />
 
@@ -544,5 +547,113 @@ function AlertControls() {
       </div>
       {message && <p className="text-xs leading-relaxed text-accent-hi">{message}</p>}
     </div>
+  );
+}
+
+/**
+ * Bibliothèque de setups : le même motif écrit une fois. Un setup supprimé ne touche pas
+ * l’historique : les trades gardent leur libellé, seul le lien disparaît.
+ */
+function SetupsCard() {
+  const repo = useRepo();
+  const refresh = useRefresh();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const { data, isLoading } = useSetups();
+  const [name, setName] = useState('');
+
+  const create = useMutation({
+    mutationFn: (input: SetupInput) => repo.createSetup(input),
+    onSuccess: async (created) => {
+      setName('');
+      await refresh();
+      toast.show(`Setup « ${created.name} » ajouté à la bibliothèque`);
+    },
+    onError: (e) => toast.show(errorMessage(e), 'error'),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => repo.deleteSetup(id),
+    onSuccess: async () => {
+      await refresh();
+      toast.show('Setup retiré de la bibliothèque');
+    },
+    onError: (e) => toast.show(errorMessage(e), 'error'),
+  });
+
+  const setups = data ?? [];
+  const valid = normalizeSetupName(name);
+
+  return (
+    <Card className="space-y-5 lg:col-span-2">
+      <SectionTitle
+        title="Bibliothèque de setups"
+        description="Un motif écrit une fois, puis mesuré sur tous les trades qui le suivent."
+        action={<Badge tone={setups.length > 0 ? 'accent' : 'neutral'}>{setups.length} setup{setups.length > 1 ? 's' : ''}</Badge>}
+      />
+
+      {isLoading ? (
+        <p className="text-sm text-muted">Chargement…</p>
+      ) : setups.length === 0 ? (
+        <p className="text-sm leading-relaxed text-muted">
+          Aucun setup pour l’instant. Crée le premier ci-dessous, ou directement depuis un trade : le champ Setup propose
+          « ＋ Nouveau setup… ».
+        </p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {setups.map((setup) => (
+            <li key={setup.id} className="flex items-start justify-between gap-3 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-fg">{setup.name}</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-muted">
+                  {setup.htf ?? setup.description ?? 'Aucun contexte décrit'}
+                  {setup.checklist.length > 0 ? ` · ${setup.checklist.length} point(s) de checklist` : ''}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                className="shrink-0 text-loss hover:text-loss"
+                aria-label={`Supprimer le setup ${setup.name}`}
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Supprimer « ${setup.name} » ?`,
+                    description:
+                      'Les trades gardent leur libellé : seul le lien vers la bibliothèque disparaît. Rien d’autre n’est supprimé.',
+                    confirmLabel: 'Supprimer le setup',
+                    danger: true,
+                  });
+                  if (ok) remove.mutate(setup.id);
+                }}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form
+        className="flex flex-wrap items-end gap-2 border-t border-line pt-5"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!valid) return;
+          create.mutate({ name: valid, description: null, htf: null, invalidation: null, checklist: [] });
+        }}
+      >
+        <div className="min-w-48 flex-1">
+          <Field label="Nouveau setup">
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Ex. Sweep de liquidité + FVG"
+            />
+          </Field>
+        </div>
+        <Button type="submit" variant="secondary" loading={create.isPending} disabled={!valid}>
+          <Plus className="h-4 w-4" aria-hidden />
+          Ajouter
+        </Button>
+      </form>
+    </Card>
   );
 }

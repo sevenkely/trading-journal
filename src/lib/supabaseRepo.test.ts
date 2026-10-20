@@ -66,7 +66,9 @@ describe('supabaseRepo (client simulé)', () => {
     expect(trade.entry_price).toBe(1.1025);
     expect(trade.exit_price).toBeNull();
     expect(trade.emotions_before).toEqual([]);
-    expect(trade.screenshots).toEqual([]);
+    expect(trade.media).toEqual([]);
+    expect(trade.confluences).toEqual([]);
+    expect(trade.thesis).toBeNull();
   });
 
   it('normalise les règles numériques des comptes', async () => {

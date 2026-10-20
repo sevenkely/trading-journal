@@ -56,7 +56,11 @@ function fakeSupabase(tables: Record<string, Row[]>, storageError: { message: st
   return { client: { from, storage } as unknown as SupabaseClient, removed, tables };
 }
 
-const trade = (id: string, screenshots: string[], extra: Row = {}): Row => ({ id, screenshots, ...extra });
+/** Les captures deviennent des médias typés : le premier emplacement est le contexte HTF. */
+const mediaOf = (paths: string[]) =>
+  paths.map((path, index) => ({ path, role: index === 0 ? 'htf' : 'ltf', caption: null }));
+
+const trade = (id: string, screenshots: string[], extra: Row = {}): Row => ({ id, media: mediaOf(screenshots), ...extra });
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -125,26 +129,24 @@ describe('supabaseRepo : captures et stockage', () => {
     expect(removed.length).toBeGreaterThan(1);
   });
 
-  it('createTrade enregistre l’identifiant choisi et les chemins des captures', async () => {
+  it('createTrade enregistre l’identifiant choisi et les médias du dossier', async () => {
     const { client, tables } = fakeSupabase({ trades: [] });
     const id = '6f1c2a9e-3b7d-4e8f-9a1b-2c3d4e5f6a7b';
+    const media = [{ path: `u1/${id}/a.webp`, role: 'htf' as const, caption: 'Contexte H4' }];
 
-    const created = await createSupabaseRepo(client, 'u1').createTrade(tradeInput(), {
-      id,
-      screenshots: [`u1/${id}/a.webp`],
-    });
+    const created = await createSupabaseRepo(client, 'u1').createTrade({ ...tradeInput(), media }, { id });
 
-    expect(tables.trades[0]).toMatchObject({ id, user_id: 'u1', screenshots: [`u1/${id}/a.webp`] });
+    expect(tables.trades[0]).toMatchObject({ id, user_id: 'u1', media });
     expect(created.id).toBe(id);
-    expect(created.screenshots).toEqual([`u1/${id}/a.webp`]);
+    expect(created.media).toEqual(media);
   });
 
-  it('createTrade sans capture laisse la base produire l’identifiant et enregistre une liste vide', async () => {
+  it('createTrade sans image laisse la base produire l’identifiant et enregistre une liste vide', async () => {
     const { client, tables } = fakeSupabase({ trades: [] });
 
     await createSupabaseRepo(client, 'u1').createTrade(tradeInput());
 
     expect(tables.trades[0]).not.toHaveProperty('id');
-    expect(tables.trades[0]).toMatchObject({ screenshots: [], user_id: 'u1' });
+    expect(tables.trades[0]).toMatchObject({ media: [], user_id: 'u1' });
   });
 });

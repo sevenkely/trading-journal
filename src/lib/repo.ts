@@ -6,6 +6,8 @@ import type {
   ImportBatch,
   ImportBatchInput,
   Profile,
+  Setup,
+  SetupInput,
   Trade,
   TradeInput,
 } from './types';
@@ -37,11 +39,11 @@ export interface Repo {
    */
   listTrades(options?: ListTradesOptions): Promise<Trade[]>;
   /**
-   * `extra.id` : identifiant choisi à l'avance (les captures sont envoyées avant le trade, dans son dossier).
-   * `extra.screenshots` : chemins des captures déjà envoyées.
+   * `extra.id` : identifiant choisi à l'avance — les captures sont envoyées avant le trade,
+   * dans son dossier, et `input.media` les référence avec leur rôle.
    */
-  createTrade(input: TradeInput, extra?: { id?: string; screenshots?: string[] }): Promise<Trade>;
-  updateTrade(id: string, patch: Partial<TradeInput> & { screenshots?: string[] }): Promise<Trade>;
+  createTrade(input: TradeInput, extra?: { id?: string }): Promise<Trade>;
+  updateTrade(id: string, patch: Partial<TradeInput>): Promise<Trade>;
   deleteTrades(ids: string[]): Promise<void>;
   insertTrades(inputs: TradeInput[]): Promise<number>;
 
@@ -52,6 +54,13 @@ export interface Repo {
 
   listDailyNotes(): Promise<DailyNote[]>;
   upsertDailyNote(input: DailyNoteInput): Promise<DailyNote>;
+
+  /** Bibliothèque de setups, du plus récent au plus ancien. */
+  listSetups(): Promise<Setup[]>;
+  createSetup(input: SetupInput): Promise<Setup>;
+  updateSetup(id: string, patch: Partial<SetupInput>): Promise<Setup>;
+  /** Les trades rattachés gardent leur libellé : la suppression ne les efface pas. */
+  deleteSetup(id: string): Promise<void>;
 
   /** Retourne le chemin de stockage de la capture */
   uploadScreenshot(tradeId: string, file: File): Promise<string>;

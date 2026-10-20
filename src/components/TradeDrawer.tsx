@@ -2,13 +2,14 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Check, ChevronLeft, ChevronRight, Pencil, Trash2, X } from 'lucide-react';
-import { useProfile, useRepo } from '../data/hooks';
+import { useProfile } from '../data/hooks';
 import { useUndoableTradeDelete } from '../data/undoableDelete';
 import { trapFocus } from './focusTrap';
 import { formatDateTime, formatDuration, formatMoney, formatNumber, formatR } from '../lib/format';
+import { storyGroups, verdictInfo } from '../lib/story';
 import type { Account, Trade } from '../lib/types';
 import { ShotThumb } from './Screenshots';
-import { Badge, Button, PnlAmount, buttonStyles } from './ui';
+import { Badge, Button, Eyebrow, PnlAmount, buttonStyles } from './ui';
 
 const TIME = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
@@ -40,7 +41,6 @@ interface TradeDrawerProps {
  * Modifier ouvre le formulaire ; Supprimer demande confirmation.
  */
 export function TradeDrawer({ trade, account, position, onPrev, onNext, onClose, onDeleted }: TradeDrawerProps) {
-  const repo = useRepo();
   const { data: profile } = useProfile();
   const titleId = useId();
   const panelRef = useRef<HTMLElement>(null);
@@ -59,7 +59,9 @@ export function TradeDrawer({ trade, account, position, onPrev, onNext, onClose,
     : new Date(trade.closed_at).toDateString() === new Date(trade.opened_at).toDateString()
       ? TIME.format(new Date(trade.closed_at))
       : formatDateTime(trade.closed_at);
-  const showShots = repo.supportsScreenshots || trade.screenshots.length > 0;
+  const verdict = verdictInfo(trade.verdict);
+  const confluences = trade.confluences ?? [];
+  const story = storyGroups(trade.media);
 
   const removeTrade = useUndoableTradeDelete();
 
@@ -157,19 +159,56 @@ export function TradeDrawer({ trade, account, position, onPrev, onNext, onClose,
             </div>
           </div>
 
-          {showShots && (
-            <Block title="Captures d’écran">
-              {trade.screenshots.length === 0 ? (
-                <p className="text-sm text-muted">Aucune capture. Tu peux en ajouter depuis Modifier.</p>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {trade.screenshots.map((path) => (
-                    <ShotThumb key={path} path={path} className="w-full" />
-                  ))}
-                </div>
-              )}
+          {trade.thesis || trade.invalidation || confluences.length > 0 || verdict ? (
+            <Block title="La raison d’entrer">
+              <div className="space-y-4 rounded-xl border border-line bg-surface-2/40 p-4 text-sm">
+                {trade.thesis && (
+                  <div>
+                    <Eyebrow>Thèse</Eyebrow>
+                    <p className="mt-1.5 whitespace-pre-line leading-relaxed text-fg-2">{trade.thesis}</p>
+                  </div>
+                )}
+                {trade.invalidation && (
+                  <div>
+                    <Eyebrow>Invalidation</Eyebrow>
+                    <p className="mt-1.5 whitespace-pre-line leading-relaxed text-fg-2">{trade.invalidation}</p>
+                  </div>
+                )}
+                {confluences.length > 0 && <Row label="Confluences">{chips(confluences)}</Row>}
+                {verdict && (
+                  <Row label="Verdict">
+                    <Badge tone={verdict.tone}>{verdict.label}</Badge>
+                  </Row>
+                )}
+              </div>
+            </Block>
+          ) : null}
+
+          {story.length > 0 && (
+            <Block title="Le dossier visuel">
+              <div className="space-y-4">
+                {story.map((group) => (
+                  <figure key={group.role} className="overflow-hidden rounded-2xl border border-line-2 bg-surface-2/40">
+                    <figcaption className="flex items-baseline justify-between gap-3 px-4 pb-2 pt-3">
+                      <Eyebrow>{group.info.label}</Eyebrow>
+                      <span className="text-[11px] text-muted">{group.info.hint}</span>
+                    </figcaption>
+                    <div className="space-y-2 px-4 pb-4">
+                      {group.items.map((item) => (
+                        <div key={item.path}>
+                          <ShotThumb path={item.path} />
+                          {item.caption && (
+                            <p className="mt-1.5 text-xs leading-relaxed text-muted">{item.caption}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </figure>
+                ))}
+              </div>
             </Block>
           )}
+
 
           <Block title="Position">
             <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-3">

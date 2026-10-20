@@ -9,9 +9,13 @@ import type {
   ImportBatch,
   ImportBatchInput,
   Profile,
+  Setup,
+  SetupInput,
   Trade,
   TradeInput,
 } from './types';
+import { normalizeMedia } from './story';
+import { normalizeSetupName } from './setups';
 import { newId } from './utils';
 
 const PAGE_SIZE = 1000;
@@ -46,8 +50,18 @@ function toTrade(row: unknown): Trade {
     mistakes: r.mistakes ?? [],
     checklist_done: r.checklist_done ?? [],
     tags: r.tags ?? [],
-    screenshots: r.screenshots ?? [],
+    setup_id: r.setup_id ?? null,
+    thesis: r.thesis ?? null,
+    invalidation: r.invalidation ?? null,
+    verdict: r.verdict ?? null,
+    confluences: r.confluences ?? [],
+    media: normalizeMedia(r.media),
   };
+}
+
+function toSetup(row: unknown): Setup {
+  const r = row as Setup;
+  return { ...r, checklist: r.checklist ?? [] };
 }
 
 function toAccount(row: unknown): Account {
@@ -67,22 +81,21 @@ function toAccount(row: unknown): Account {
 }
 
 /**
- * Chemins des captures des trades rattachés aux valeurs données, lus avant suppression
+ * Chemins des médias des trades rattachés aux valeurs données, lus avant suppression
  * (une fois les lignes effacées, ils ne sont plus accessibles).
  */
-async function screenshotPaths(
+async function mediaPaths(
   sb: SupabaseClient,
   column: 'id' | 'account_id' | 'import_batch_id',
   values: string[],
 ): Promise<string[]> {
   const paths: string[] = [];
   for (let i = 0; i < values.length; i += CHUNK) {
-    const { data, error } = await sb
-      .from('trades')
-      .select('screenshots')
-      .in(column, values.slice(i, i + CHUNK));
+    const { data, error } = await sb.from('trades').select('media').in(column, values.slice(i, i + CHUNK));
     check(error);
-    for (const row of data ?? []) paths.push(...((row as { screenshots: string[] | null }).screenshots ?? []));
+    for (const row of data ?? []) {
+      for (const item of normalizeMedia((row as { media: unknown }).media)) paths.push(item.path);
+    }
   }
   return paths;
 }
@@ -148,7 +161,7 @@ export function createSupabaseRepo(sb: SupabaseClient, userId: string): Repo {
     },
 
     async deleteAccount(id) {
-      const paths = await screenshotPaths(sb, 'account_id', [id]);
+      const paths = await mediaPaths(sb, 'account_id', [id]);
       const { error } = await sb.from('accounts').delete().eq('id', id);
       check(error);
       await removeScreenshotFiles(sb, paths);
@@ -177,11 +190,12 @@ export function createSupabaseRepo(sb: SupabaseClient, userId: string): Repo {
       return limit === null ? out : out.reverse();
     },
 
-    async createTrade(input: TradeInput, extra?: { id?: string; screenshots?: string[] }) {
+    async createTrade(input: TradeInput, extra?: { id?: string }) {
       const row = {
         ...input,
         ...(extra?.id ? { id: extra.id } : {}),
-        screenshots: extra?.screenshots ?? [],
+        media: input.media ?? [],
+        confluences: input.confluences ?? [],
         user_id: userId,
       };
       const { data, error } = await sb.from('trades').insert(row).select().single();
@@ -197,7 +211,7 @@ export function createSupabaseRepo(sb: SupabaseClient, userId: string): Repo {
 
     async deleteTrades(ids) {
       if (ids.length === 0) return;
-      const paths = await screenshotPaths(sb, 'id', ids);
+      const paths = await mediaPaths(sb, 'id', ids);
       const { error } = await sb.from('trades').delete().in('id', ids);
       check(error);
       await removeScreenshotFiles(sb, paths);
@@ -229,8 +243,8 @@ export function createSupabaseRepo(sb: SupabaseClient, userId: string): Repo {
     },
 
     async deleteImportBatch(id) {
-      // Les trades de l'import disparaissent avec lui (cascade) : on lit leurs captures avant
-      const paths = await screenshotPaths(sb, 'import_batch_id', [id]);
+      // Les trades de l'import disparaissent avec lui (cascade) : on lit leurs médias avant
+      const paths = await mediaPaths(sb, 'import_batch_id', [id]);
       const { error } = await sb.from('import_batches').delete().eq('id', id);
       check(error);
       await removeScreenshotFiles(sb, paths);
@@ -254,6 +268,39 @@ export function createSupabaseRepo(sb: SupabaseClient, userId: string): Repo {
         .single();
       check(error);
       return data as DailyNote;
+    },
+
+    async listSetups() {
+      const { data, error } = await sb
+        .from('setups')
+        .select('*')
+        .eq('user_id', userId)
+        .order('name', { ascending: true });
+      check(error);
+      return (data ?? []).map((row) => toSetup(row));
+    },
+
+    async createSetup(input: SetupInput) {
+      const { data, error } = await sb
+        .from('setups')
+        .insert({ ...input, name: normalizeSetupName(input.name), user_id: userId })
+        .select()
+        .single();
+      check(error);
+      return toSetup(data);
+    },
+
+    async updateSetup(id, patch) {
+      const next = patch.name ? { ...patch, name: normalizeSetupName(patch.name) } : patch;
+      const { data, error } = await sb.from('setups').update(next).eq('id', id).select().single();
+      check(error);
+      return toSetup(data);
+    },
+
+    async deleteSetup(id) {
+      // Le libellé des trades reste (on delete set null sur setup_id) : l'historique est conservé.
+      const { error } = await sb.from('setups').delete().eq('id', id);
+      check(error);
     },
 
     async uploadScreenshot(tradeId, file) {

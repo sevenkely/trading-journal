@@ -45,6 +45,7 @@ export function tradeInput(overrides: Partial<TradeInput> = {}): TradeInput {
     fees: 0,
     session: null,
     setup: null,
+    setup_id: null,
     timeframe: null,
     emotions_before: [],
     emotions_after: [],
@@ -53,6 +54,11 @@ export function tradeInput(overrides: Partial<TradeInput> = {}): TradeInput {
     checklist_done: [],
     notes: null,
     tags: [],
+    thesis: null,
+    invalidation: null,
+    verdict: null,
+    confluences: [],
+    media: [],
     source: 'manual',
     external_id: null,
     import_batch_id: null,
@@ -71,7 +77,7 @@ export function makeTrade(overrides: Partial<Trade> = {}): Trade {
     gross_pnl: gross,
     fees,
     net_pnl: overrides.net_pnl ?? Math.round((gross - fees) * 100) / 100,
-    screenshots: overrides.screenshots ?? [],
+    media: overrides.media ?? [],
     created_at: overrides.created_at ?? '2026-10-05T09:00:00.000Z',
   };
 }

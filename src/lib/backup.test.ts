@@ -24,7 +24,7 @@ function sampleData() {
       opened_at: '2026-10-05T08:00:00.000Z',
       gross_pnl: 150,
       fees: 4,
-      screenshots: ['u1/a1/capture.png'],
+      media: [{ path: 'u1/a1/capture.png', role: 'htf', caption: 'Contexte' }],
       import_batch_id: 'lot-1',
     }),
     makeTrade({
@@ -64,11 +64,11 @@ function fakeRepo() {
 }
 
 describe('buildBackup', () => {
-  it('retire les captures et les lots d’import, et garde le reste', () => {
+  it('retire les images et les lots d’import, et garde le reste', () => {
     const { accounts, trades, notes } = sampleData();
     const backup = buildBackup(accounts, trades, notes, new Date('2026-10-09T10:00:00.000Z'));
     expect(backup).toMatchObject({ app: BACKUP_APP, version: 1, exportedAt: '2026-10-09T10:00:00.000Z' });
-    expect(backup.trades[0]).toMatchObject({ id: 't1', screenshots: [], import_batch_id: null, net_pnl: 146 });
+    expect(backup.trades[0]).toMatchObject({ id: 't1', media: [], import_batch_id: null, net_pnl: 146 });
     expect(backup.accounts).toHaveLength(1);
     expect(backup.notes).toEqual(notes);
   });

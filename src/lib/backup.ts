@@ -13,14 +13,14 @@ export interface BackupFile {
   notes: DailyNote[];
 }
 
-/** Construit la sauvegarde. Les captures (fichiers hébergés) et les lots d’import ne sont pas inclus. */
+/** Construit la sauvegarde. Les images (fichiers hébergés) et les lots d’import ne sont pas inclus. */
 export function buildBackup(accounts: Account[], trades: Trade[], notes: DailyNote[], now = new Date()): BackupFile {
   return {
     app: BACKUP_APP,
     version: BACKUP_VERSION,
     exportedAt: now.toISOString(),
     accounts: accounts.map((a) => ({ ...a })),
-    trades: trades.map((t) => ({ ...t, screenshots: [], import_batch_id: null })),
+    trades: trades.map((t) => ({ ...t, media: [], import_batch_id: null })),
     notes: notes.map((n) => ({ ...n })),
   };
 }
@@ -142,7 +142,16 @@ export function planRestore(
       skippedTrades += 1;
       continue;
     }
-    const rest = withoutKeys(t, ['id', 'net_pnl', 'screenshots', 'created_at', 'account_id', 'import_batch_id']);
+    // Les setups de la bibliothèque ne sont pas dans la sauvegarde : le libellé reste, le lien saute.
+    const rest = withoutKeys(t, [
+      'id',
+      'net_pnl',
+      'media',
+      'created_at',
+      'account_id',
+      'import_batch_id',
+      'setup_id',
+    ]);
     trades.push({ accountBackupId: t.account_id, input: { ...rest, import_batch_id: null } });
   }
 

@@ -197,7 +197,7 @@ describe('accessibilité : axe-core, WCAG 2.2 niveaux A et AA', () => {
 
   it('aucune violation sur la saisie d’un nouveau trade, captures comprises', async () => {
     await seed();
-    const host = await mountAt('/trades/nouveau', 'Captures d’écran');
+    const host = await mountAt('/trades/nouveau', 'Le dossier visuel');
     expect(await auditViolations(host)).toEqual([]);
   }, 60_000);
 

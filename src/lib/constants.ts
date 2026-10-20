@@ -61,6 +61,20 @@ export const MISTAKES = [
   'Trade pendant une news',
 ];
 
+/** Ce qui a confirmé l'entrée. Coché sur le trade, mesuré ensuite par l'analyse. */
+export const CONFLUENCES = [
+  'Biais HTF aligné',
+  'Zone HTF (FVG, order block)',
+  'Niveau clé (PDH/PDL, chiffre rond)',
+  'Sweep de liquidité',
+  'BOS / CHoCH',
+  'Retest accepté',
+  'Volume au niveau',
+  'Session active (ouverture NY / Londres)',
+  'Trigger LTF net',
+  'News écartée',
+];
+
 export const DEFAULT_CHECKLIST = [
   'Biais directionnel défini (HTF)',
   'Setup conforme à mon plan',

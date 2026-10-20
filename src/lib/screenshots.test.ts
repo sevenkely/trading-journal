@@ -4,10 +4,11 @@ import type { Repo } from './repo';
 import type { TradeInput } from './types';
 import {
   MAX_SOURCE_BYTES,
-  createTradeWithScreenshots,
+  createTradeWithMedia,
   fitWithin,
   prepareScreenshot,
   validateScreenshotFile,
+  type PendingMedia,
 } from './screenshots';
 import { tradeInput } from '../test/fixtures';
 
@@ -123,41 +124,44 @@ function makeRepo(options: { failUploadAt?: number; failInsert?: boolean } = {})
       if (options.failUploadAt === uploads) throw new Error('Réseau indisponible');
       return `u1/${tradeId}/${file.name}`;
     }),
-    createTrade: vi.fn(async (input: TradeInput, extra?: { id?: string; screenshots?: string[] }) => {
+    createTrade: vi.fn(async (input: TradeInput, extra?: { id?: string }) => {
       if (options.failInsert) throw new Error('Insertion refusée');
-      return { ...input, id: extra?.id ?? '', screenshots: extra?.screenshots ?? [] };
+      return { ...input, id: extra?.id ?? '', media: input.media ?? [] };
     }),
     deleteScreenshotFile: vi.fn(async (_path: string) => undefined),
   };
   return repo;
 }
 
-const files = () => [
-  new File(['a'], 'a.webp', { type: 'image/webp' }),
-  new File(['b'], 'b.webp', { type: 'image/webp' }),
+const pending = (): PendingMedia[] => [
+  { file: new File(['a'], 'a.webp', { type: 'image/webp' }), role: 'htf', caption: 'Contexte H4' },
+  { file: new File(['b'], 'b.webp', { type: 'image/webp' }), role: 'ltf', caption: null },
 ];
 
-describe('createTradeWithScreenshots', () => {
-  it('envoie les captures puis crée le trade avec le même identifiant', async () => {
+describe('createTradeWithMedia', () => {
+  it('envoie les images puis crée le trade avec le même identifiant et les rôles', async () => {
     const repo = makeRepo();
-    const trade = await createTradeWithScreenshots(repo as unknown as Repo, tradeInput(), files());
+    const trade = await createTradeWithMedia(repo as unknown as Repo, tradeInput(), pending());
 
     expect(trade.id).toMatch(UUID_V4);
-    expect(trade.screenshots).toEqual([`u1/${trade.id}/a.webp`, `u1/${trade.id}/b.webp`]);
-    expect(repo.createTrade).toHaveBeenCalledWith(expect.anything(), { id: trade.id, screenshots: trade.screenshots });
+    expect(trade.media).toEqual([
+      { path: `u1/${trade.id}/a.webp`, role: 'htf', caption: 'Contexte H4' },
+      { path: `u1/${trade.id}/b.webp`, role: 'ltf', caption: null },
+    ]);
+    expect(repo.createTrade).toHaveBeenCalledWith(expect.objectContaining({ media: trade.media }), { id: trade.id });
     expect(repo.deleteScreenshotFile).not.toHaveBeenCalled();
   });
 
-  it('crée le trade sans envoi quand il n’y a pas de capture', async () => {
+  it('crée le trade sans envoi quand il n’y a pas d’image', async () => {
     const repo = makeRepo();
-    const trade = await createTradeWithScreenshots(repo as unknown as Repo, tradeInput(), []);
+    const trade = await createTradeWithMedia(repo as unknown as Repo, tradeInput(), []);
     expect(repo.uploadScreenshot).not.toHaveBeenCalled();
-    expect(trade.screenshots).toEqual([]);
+    expect(trade.media).toEqual([]);
   });
 
-  it('supprime les fichiers déjà envoyés si une capture échoue', async () => {
+  it('supprime les fichiers déjà envoyés si une image échoue', async () => {
     const repo = makeRepo({ failUploadAt: 2 });
-    await expect(createTradeWithScreenshots(repo as unknown as Repo, tradeInput(), files())).rejects.toThrow(
+    await expect(createTradeWithMedia(repo as unknown as Repo, tradeInput(), pending())).rejects.toThrow(
       'Réseau indisponible',
     );
     expect(repo.deleteScreenshotFile).toHaveBeenCalledTimes(1);
@@ -167,7 +171,7 @@ describe('createTradeWithScreenshots', () => {
 
   it('supprime tous les fichiers envoyés si l’insertion du trade échoue', async () => {
     const repo = makeRepo({ failInsert: true });
-    await expect(createTradeWithScreenshots(repo as unknown as Repo, tradeInput(), files())).rejects.toThrow(
+    await expect(createTradeWithMedia(repo as unknown as Repo, tradeInput(), pending())).rejects.toThrow(
       'Insertion refusée',
     );
     expect(repo.deleteScreenshotFile).toHaveBeenCalledTimes(2);

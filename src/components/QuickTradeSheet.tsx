@@ -7,7 +7,7 @@ import { X } from 'lucide-react';
 import { useRefresh, useRepo } from '../data/hooks';
 import { formatR, fromDateTimeLocal, toDateTimeLocal } from '../lib/format';
 import { parseFuturesSymbol } from '../lib/futures';
-import { createTradeWithScreenshots } from '../lib/screenshots';
+import { createTradeWithMedia } from '../lib/screenshots';
 import { numberOrNull, round2 } from '../lib/utils';
 import type { Account, Direction, TradeInput } from '../lib/types';
 import FuturesCalculator from './FuturesCalculator';
@@ -63,7 +63,7 @@ export function QuickTradeSheet({ accounts, defaultAccountId, onClose }: { accou
   };
 
   const save = useMutation({
-    mutationFn: (input: TradeInput) => createTradeWithScreenshots(repo, input, []),
+    mutationFn: (input: TradeInput) => createTradeWithMedia(repo, input, []),
     onSuccess: async () => {
       await refresh();
       toast.show('Trade ajouté');

@@ -5,6 +5,37 @@ export type Direction = 'long' | 'short';
 export type TradeSource = 'manual' | 'import';
 export type ImportSource = 'mt5' | 'ninjatrader' | 'tradingview' | 'csv';
 
+/**
+ * Rôle d'une image dans le dossier : le contexte (HTF), le déclencheur (LTF), le résultat.
+ * C'est ce qui ordonne la revue visuelle et permet de relire un trade comme un récit.
+ */
+export type MediaRole = 'htf' | 'ltf' | 'result' | 'other';
+
+export interface TradeMedia {
+  /** Chemin dans le stockage (bucket Supabase) */
+  path: string;
+  role: MediaRole;
+  caption: string | null;
+}
+
+/** Verdict après coup : la thèse a-t-elle tenu ? */
+export type TradeVerdict = 'played_out' | 'invalidated' | 'early_exit' | 'late_exit' | 'no_plan';
+
+/** Setup réutilisable : le même motif d'entrée, écrit une fois, puis mesuré. */
+export interface Setup {
+  id: string;
+  name: string;
+  description: string | null;
+  /** Contexte attendu sur l'unité de temps supérieure */
+  htf: string | null;
+  /** Ce qui invalide le setup avant l'entrée */
+  invalidation: string | null;
+  checklist: string[];
+  created_at: string;
+}
+
+export type SetupInput = Omit<Setup, 'id' | 'created_at'>;
+
 export interface Profile {
   id: string;
   display_name: string | null;
@@ -67,13 +98,22 @@ export interface TradeInput {
   source: TradeSource;
   external_id: string | null;
   import_batch_id: string | null;
+  /** Setup de la bibliothèque ; `setup` garde le libellé, pour les trades importés et les filtres. */
+  setup_id?: string | null;
+  /** La raison d'entrer, écrite avant le trade. */
+  thesis?: string | null;
+  /** Ce qui aurait prouvé que la thèse était fausse. */
+  invalidation?: string | null;
+  verdict?: TradeVerdict | null;
+  confluences?: string[];
+  media?: TradeMedia[];
 }
 
 export interface Trade extends TradeInput {
   id: string;
   /** Calculé en base : gross_pnl - fees */
   net_pnl: number;
-  screenshots: string[];
+  media: TradeMedia[];
   created_at: string;
 }
 
