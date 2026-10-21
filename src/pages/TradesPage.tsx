@@ -3,13 +3,30 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ArrowUpDown, Bookmark, Check, ChevronLeft, ChevronRight, Download, Pencil, Plus, Search, SlidersHorizontal, Trash2, X, Zap } from 'lucide-react';
 import { useAccounts, useTrades } from '../data/hooks';
 import { computeStats, floatingPnl, isOpen } from '../lib/metrics';
+import { statSparks } from '../lib/spark';
 import { formatDateTime, formatNumber, formatPercent, formatProfitFactor, formatR } from '../lib/format';
 import { tradesToCsv } from '../lib/csv';
 import { useUndoableTradeDelete } from '../data/undoableDelete';
 import { useHiddenIds } from '../lib/pendingDeletion';
 import { TradeDrawer } from '../components/TradeDrawer';
 import { QuickTradeSheet } from '../components/QuickTradeSheet';
-import { Badge, Button, Card, EmptyState, Input, Loading, PageHeader, PnlAmount, Select, Stat, StatStrip, buttonStyles, cn } from '../components/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  Loading,
+  PageHeader,
+  PnlAmount,
+  Select,
+  Stat,
+  StatStrip,
+  buttonStyles,
+  cn,
+  factorTone,
+  pnlTone,
+} from '../components/ui';
 import {
   COLUMN_LABELS,
   DEFAULT_QUERY,
@@ -179,6 +196,11 @@ export default function TradesPage() {
   const { page, pageCount, start, end } = paginate(sorted.length, query.page, PAGE_SIZE);
   const pageRows = sorted.slice(start, end);
   const stats = computeStats(sorted, BROWSER_TZ);
+  // Tendance de chaque chiffre, sur la sélection courante : elle alimente le fond des cellules.
+  const sparks = statSparks(
+    sorted.map((trade) => trade.net_pnl),
+    sorted.map((trade) => rMultiple(trade)),
+  );
   // Pied de tableau : ce qui est affiché, positions ouvertes comprises (leur P&L est flottant).
   const openRows = sorted.filter(isOpen).length;
   const shownPnl = stats.netPnl + floatingPnl(sorted);
@@ -429,10 +451,27 @@ export default function TradesPage() {
       </Card>
 
       <StatStrip className="mb-6">
-        <Stat label="P&L net" value={<PnlAmount value={stats.netPnl} currency={currency} />} sub={`${stats.count} trade(s)`} />
-        <Stat label="Réussite" value={formatPercent(stats.winRate)} sub={`${stats.wins} G · ${stats.losses} P · ${stats.breakeven} BE`} />
-        <Stat label="Profit factor" value={formatProfitFactor(stats.profitFactor)} />
-        <Stat label="R moyen" value={formatR(stats.avgR)} />
+        <Stat
+          label="P&L net"
+          value={<PnlAmount value={stats.netPnl} currency={currency} />}
+          sub={`${stats.count} trade(s)`}
+          spark={sparks.pnl}
+          sparkTone={pnlTone(stats.netPnl)}
+        />
+        <Stat
+          label="Réussite"
+          value={formatPercent(stats.winRate)}
+          sub={`${stats.wins} G · ${stats.losses} P · ${stats.breakeven} BE`}
+          spark={sparks.winRate}
+          sparkTone="accent"
+        />
+        <Stat
+          label="Profit factor"
+          value={formatProfitFactor(stats.profitFactor)}
+          spark={sparks.profitFactor}
+          sparkTone={factorTone(stats.profitFactor)}
+        />
+        <Stat label="R moyen" value={formatR(stats.avgR)} spark={sparks.avgR} sparkTone={pnlTone(stats.avgR)} />
       </StatStrip>
 
       {sorted.length === 0 ? (
@@ -482,7 +521,7 @@ export default function TradesPage() {
             <div className="max-h-[calc(100dvh-20rem)] overflow-auto">
               <table className="w-full min-w-[720px] text-sm">
                 <caption className="sr-only">Trades, triables par colonne. Une ligne ouvre son détail.</caption>
-                <thead className="sticky top-0 z-10 bg-surface-2 text-left text-xs text-muted">
+                <thead className="sticky top-0 z-10 bg-surface-2 text-left text-[11px] uppercase tracking-[0.1em] text-muted">
                   <tr>
                     <th scope="col" className="w-12 border-b border-line px-4 py-3">
                       <input type="checkbox" aria-label="Sélectionner les trades de cette page" checked={allPageSelected} onChange={togglePage} className="h-4 w-4 accent-accent" />

@@ -11,10 +11,27 @@ import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE } from '../lib/constants';
 import { forecastTarget, type Forecast } from '../lib/forecast';
 import { capFirst, dayKey, formatDate, formatDateTime, formatMoney, formatNumber, formatPercent, formatProfitFactor, formatSignedCompact } from '../lib/format';
 import { computeStats, sortByTradeTime, tradeTime, type Stats } from '../lib/metrics';
+import { statSparks } from '../lib/spark';
+import { rMultiple } from '../lib/tradeQuery';
 import { lastMonths, mondayOf, monthBounds, monthDays, monthWeeks, shiftDays, shiftMonthKey, weekKeys } from '../lib/patterns';
 import { round2 } from '../lib/utils';
 import type { Account, Trade } from '../lib/types';
-import { Badge, Button, Card, Loading, PageHeader, SectionTitle, Segmented, Stat, StatStrip, cn, PnlAmount, type Tone } from '../components/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  Loading,
+  PageHeader,
+  SectionTitle,
+  Segmented,
+  Stat,
+  StatStrip,
+  cn,
+  factorTone,
+  pnlTone,
+  PnlAmount,
+  type Tone,
+} from '../components/ui';
 import { Logo } from '../components/Logo';
 
 type ReportPeriod = 'semaine' | 'mois' | '12m';
@@ -308,6 +325,10 @@ export default function ReportPage() {
   const overtradingIds = new Set(overtrading.map((t) => t.id));
 
   const stats = computeStats(periodTrades);
+  const sparks = statSparks(
+    periodTrades.map((trade) => trade.net_pnl),
+    periodTrades.map((trade) => rMultiple(trade)),
+  );
 
   // Un point par jour : sert au graphique, au meilleur / pire jour et au nombre de jours tradés.
   // Sur douze mois, l’échelle utile est le mois : les points quotidiens ne sont pas calculés.
@@ -438,10 +459,22 @@ export default function ReportPage() {
           label="P&L net"
           value={<PnlAmount value={stats.netPnl} currency={currency} />}
           sub={`${range.previousLabel} ${formatMoney(previousPnl, currency, true)}`}
+          spark={sparks.pnl}
+          sparkTone={pnlTone(stats.netPnl)}
         />
         <Stat label="Trades" value={stats.count} sub={`${stats.wins} G · ${stats.losses} P · ${stats.breakeven} BE`} />
-        <Stat label="Réussite" value={formatPercent(stats.count > 0 ? stats.winRate : null)} />
-        <Stat label="Profit factor" value={formatProfitFactor(stats.profitFactor)} />
+        <Stat
+          label="Réussite"
+          value={formatPercent(stats.count > 0 ? stats.winRate : null)}
+          spark={sparks.winRate}
+          sparkTone="accent"
+        />
+        <Stat
+          label="Profit factor"
+          value={formatProfitFactor(stats.profitFactor)}
+          spark={sparks.profitFactor}
+          sparkTone={factorTone(stats.profitFactor)}
+        />
       </StatStrip>
       <StatStrip className="mt-px">
         <Stat label={range.countLabel} value={`${tradedCount} / ${countTotal}`} sub={range.countSub} />

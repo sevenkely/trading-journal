@@ -157,6 +157,19 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
   background-attachment: fixed;
 }
 
+/*
+ * Trame de salle de marché : un quadrillage de papier millimétré, estompé vers le bas.
+ * Il ne porte aucune donnée — c'est un repère de fond, à la manière d'un écran de terminal.
+ */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--color-line-2) 70%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--color-line-2) 70%, transparent) 1px, transparent 1px);
+  background-size: 96px 96px;
+  opacity: 0.45;
+  mask-image: linear-gradient(to bottom, black, transparent 60%);
+}
+
 /* Squelette de chargement : balayage par transform (jamais de background-position) */
 @keyframes sweep {
   from {
@@ -250,6 +263,10 @@ input[type='datetime-local']::-webkit-calendar-picker-indicator {
   .app-glow {
     background-image: none !important;
     background-color: transparent !important;
+  }
+
+  .bg-grid {
+    display: none !important;
   }
 
   .print-flat {

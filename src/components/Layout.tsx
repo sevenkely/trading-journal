@@ -139,6 +139,9 @@ export default function Layout() {
 
   return (
     <div className="app-glow relative min-h-dvh">
+      {/* Trame de fond : un quadrillage de terminal, estompé avant le contenu */}
+      <div aria-hidden className="bg-grid no-print pointer-events-none absolute inset-x-0 top-0 h-[70vh]" />
+
       {/* Navigation latérale (ordinateur) */}
       <aside className="no-print fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-line bg-panel/90 px-4 py-6 backdrop-blur-xl md:flex">
         <Brand />

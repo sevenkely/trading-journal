@@ -13,9 +13,11 @@ import {
 } from 'react';
 import { animate, motion, useReducedMotion } from 'motion/react';
 import { ChevronDown, Loader2 } from 'lucide-react';
+import { EASE } from '../lib/motion';
+import { Sparkline, type SparkTone } from './charts/Sparkline';
 
-/** Courbe de mouvement unique : rapide au départ, très douce à l’arrivée. */
-export const EASE = [0.16, 1, 0.3, 1] as const;
+/** Courbe de mouvement unique : rapide au départ, très douce à l’arrivée (définie dans lib/motion). */
+export { EASE };
 
 export function cn(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
@@ -107,7 +109,7 @@ export function Card({ className, children, ...props }: HTMLAttributes<HTMLDivEl
     <div
       {...props}
       className={cn(
-        'rounded-card border border-line bg-surface p-5 shadow-card transition-colors duration-300 hover:border-line-2',
+        'rounded-card border border-line bg-surface p-5 shadow-card transition-[border-color,box-shadow,transform] duration-300 ease-out-expo hover:-translate-y-0.5 hover:border-line-2 hover:shadow-raised',
         className,
       )}
     >
@@ -162,6 +164,21 @@ export function Eyebrow({ children, className }: { children: ReactNode; classNam
   return <span className={cn('eyebrow block', className)}>{children}</span>;
 }
 
+/**
+ * Teinte d'un tracé de fond : elle suit le signe de la valeur affichée, jamais l'humeur de la courbe.
+ * Un R moyen négatif reste rouge même si sa dernière valeur remonte.
+ */
+export function pnlTone(value: number | null | undefined): SparkTone {
+  if (value == null || !Number.isFinite(value) || value === 0) return 'muted';
+  return value > 0 ? 'gain' : 'loss';
+}
+
+/** Profit factor : au-dessus de 1 la stratégie gagne, en dessous elle perd. */
+export function factorTone(value: number | null | undefined): SparkTone {
+  if (value == null || !Number.isFinite(value)) return 'muted';
+  return value >= 1 ? 'gain' : 'loss';
+}
+
 export type FigureTone = 'neutral' | 'gain' | 'loss' | 'accent' | 'muted';
 
 const FIGURE_TONES: Record<FigureTone, string> = {
@@ -172,7 +189,10 @@ const FIGURE_TONES: Record<FigureTone, string> = {
   muted: 'text-muted',
 };
 
-/** Chiffre clé : ce que ça mesure, combien, et d'où ça vient. */
+/**
+ * Chiffre clé : ce que ça mesure, combien, et d'où ça vient.
+ * `spark` dessine la tendance du chiffre derrière lui — la courbe de fond du relevé.
+ */
 export function Figure({
   label,
   value,
@@ -180,6 +200,8 @@ export function Figure({
   tone = 'neutral',
   size = 'md',
   className,
+  spark,
+  sparkTone = 'auto',
 }: {
   label: ReactNode;
   value: ReactNode;
@@ -187,20 +209,30 @@ export function Figure({
   tone?: FigureTone;
   size?: 'md' | 'lg';
   className?: string;
+  spark?: readonly number[];
+  sparkTone?: SparkTone;
 }) {
   return (
-    <div className={cn('min-w-0 px-4 py-4 md:px-5', className)}>
-      <Eyebrow className="min-h-[1.2em] leading-snug">{label}</Eyebrow>
+    <div className={cn('group relative isolate min-w-0 overflow-hidden px-4 pt-4 md:px-5', spark && spark.length > 1 ? 'pb-14' : 'pb-4', className)}>
+      {spark && spark.length > 1 && (
+        <Sparkline
+          values={spark}
+          tone={sparkTone}
+          strokeWidth={1.35}
+          className="pointer-events-none absolute inset-x-0 bottom-0 block h-12 opacity-60 transition-opacity duration-300 ease-out-expo [mask-image:linear-gradient(to_top,black_45%,transparent_92%)] group-hover:opacity-90"
+        />
+      )}
+      <Eyebrow className="relative z-10 min-h-[1.2em] leading-snug">{label}</Eyebrow>
       <div
         className={cn(
-          'figure mt-2 whitespace-nowrap font-semibold',
+          'figure relative z-10 mt-2 whitespace-nowrap font-semibold',
           size === 'lg' ? 'text-2xl md:text-[1.7rem]' : 'text-lg md:text-xl',
           FIGURE_TONES[tone],
         )}
       >
         {value}
       </div>
-      {sub && <div className="mt-1.5 text-[11px] leading-snug text-muted">{sub}</div>}
+      {sub && <div className="relative z-10 mt-1.5 text-[11px] leading-snug text-muted">{sub}</div>}
     </div>
   );
 }
@@ -402,12 +434,47 @@ export function PnlAmount({
   );
 }
 
-export function Stat({ label, value, sub, valueClass }: { label: string; value: ReactNode; sub?: ReactNode; valueClass?: string }) {
+export function Stat({
+  label,
+  value,
+  sub,
+  valueClass,
+  spark,
+  sparkTone = 'auto',
+}: {
+  label: string;
+  value: ReactNode;
+  sub?: ReactNode;
+  valueClass?: string;
+  /** Tendance du chiffre dessinée en fond de cellule (vert si la série monte, rouge si elle descend). */
+  spark?: readonly number[];
+  sparkTone?: SparkTone;
+}) {
   return (
-    <div className="min-w-0 bg-surface p-5">
-      <div className="text-[13px] text-muted">{label}</div>
-      <div className={cn('mt-2 break-words text-xl font-semibold tabular-nums tracking-tight md:text-2xl', valueClass ?? 'text-fg')}>{value}</div>
-      {sub && <div className="mt-1.5 truncate text-xs text-muted">{sub}</div>}
+    <div
+      className={cn(
+        'group relative isolate min-w-0 overflow-hidden bg-surface px-5 pt-5 transition-colors duration-300 hover:bg-surface-2/50',
+        spark && spark.length > 1 ? 'pb-14' : 'pb-5',
+      )}
+    >
+      {spark && spark.length > 1 && (
+        <Sparkline
+          values={spark}
+          tone={sparkTone}
+          strokeWidth={1.35}
+          className="pointer-events-none absolute inset-x-0 bottom-0 block h-12 opacity-60 transition-opacity duration-300 ease-out-expo [mask-image:linear-gradient(to_top,black_45%,transparent_92%)] group-hover:opacity-90"
+        />
+      )}
+      <div className="relative z-10 text-[11px] font-medium uppercase leading-snug tracking-[0.13em] text-muted">{label}</div>
+      <div
+        className={cn(
+          'figure relative z-10 mt-2 break-words text-xl font-semibold tracking-tight md:text-2xl',
+          valueClass ?? 'text-fg',
+        )}
+      >
+        {value}
+      </div>
+      {sub && <div className="relative z-10 mt-1.5 truncate text-xs text-muted">{sub}</div>}
     </div>
   );
 }
@@ -426,7 +493,7 @@ export function StatStrip({
   return (
     <div
       className={cn(
-        'grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line shadow-card',
+        'stagger grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line shadow-card',
         columns === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4',
         className,
       )}

@@ -6,6 +6,8 @@ import { detectBehavior, MAX_TRADES_PER_DAY, REVENGE_WINDOW_MINUTES } from '../l
 import { extremes } from '../lib/highlights';
 import { breakdown, computeStats, isOpen, sortByTradeTime, tradeTime, weekdayOf, type BreakdownRow } from '../lib/metrics';
 import { hourGrid, outcomeSplit, rMultiples } from '../lib/chartData';
+import { statSparks } from '../lib/spark';
+import { rMultiple } from '../lib/tradeQuery';
 import { HourDayHeatmap } from '../components/charts/HourDayHeatmap';
 import { OutcomeBar } from '../components/charts/OutcomeBar';
 import { RHistogram } from '../components/charts/RHistogram';
@@ -38,6 +40,8 @@ import {
   Stat,
   StatStrip,
   cn,
+  factorTone,
+  pnlTone,
 } from '../components/ui';
 
 const PERIODS: { value: number; label: string }[] = [
@@ -310,6 +314,12 @@ export default function AnalysisPage() {
   // Le réalisé seulement : une position ouverte n'a pas de résultat, juste un P&L flottant
   const realized = scoped.filter((t) => !isOpen(t));
   const openCount = scoped.length - realized.length;
+  // Tendance des chiffres clés, dans l'ordre chronologique : elle dessine le fond des cellules
+  const chrono = sortByTradeTime(realized);
+  const sparks = statSparks(
+    chrono.map((trade) => trade.net_pnl),
+    chrono.map((trade) => rMultiple(trade)),
+  );
   const planYes = realized.filter((t) => t.plan_respected === true);
   const planNo = realized.filter((t) => t.plan_respected === false);
   const withMistakes = realized.filter((t) => t.mistakes.length > 0);
@@ -375,14 +385,33 @@ export default function AnalysisPage() {
         <div className="space-y-6">
           {/* Vue d’ensemble : six chiffres au maximum */}
           <StatStrip columns={3}>
-            <Stat label="P&L net" value={<PnlAmount value={stats.netPnl} currency={currency} />} sub={`${stats.count} trade(s)`} />
+            <Stat
+              label="P&L net"
+              value={<PnlAmount value={stats.netPnl} currency={currency} />}
+              sub={`${stats.count} trade(s)`}
+              spark={sparks.pnl}
+              sparkTone={pnlTone(stats.netPnl)}
+            />
             <Stat
               label="Réussite"
               value={formatPercent(stats.winRate)}
               sub={`${stats.wins} G · ${stats.losses} P · ${stats.breakeven} BE`}
+              spark={sparks.winRate}
+              sparkTone="accent"
             />
-            <Stat label="Profit factor" value={formatProfitFactor(stats.profitFactor)} />
-            <Stat label="R moyen" value={formatR(stats.avgR)} valueClass={signClass(stats.avgR)} />
+            <Stat
+              label="Profit factor"
+              value={formatProfitFactor(stats.profitFactor)}
+              spark={sparks.profitFactor}
+              sparkTone={factorTone(stats.profitFactor)}
+            />
+            <Stat
+              label="R moyen"
+              value={formatR(stats.avgR)}
+              valueClass={signClass(stats.avgR)}
+              spark={sparks.avgR}
+              sparkTone={pnlTone(stats.avgR)}
+            />
             <Stat label="Meilleur jour" value={<PnlAmount value={stats.bestDay} currency={currency} />} />
             <Stat label="Pire jour" value={<PnlAmount value={stats.worstDay} currency={currency} />} />
           </StatStrip>

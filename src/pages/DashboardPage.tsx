@@ -10,6 +10,8 @@ import { EquityPanel } from '../components/charts/EquityPanel';
 import { dailyBars, type DayBar } from '../lib/chartData';
 import { computeStats, dailyMap, floatingPnl, isOpen, sortByTradeTime, tradeTime } from '../lib/metrics';
 import { monthDays, shiftMonthKey } from '../lib/patterns';
+import { statSparks } from '../lib/spark';
+import { rMultiple } from '../lib/tradeQuery';
 import { evaluateAccount, hasAnyRule, resolveAmount } from '../lib/rules';
 import { capFirst, dayKey, formatDate, formatDateTime, formatMoney, formatPercent, formatProfitFactor, formatR } from '../lib/format';
 import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE } from '../lib/constants';
@@ -36,6 +38,8 @@ import {
   TickRail,
   buttonStyles,
   cn,
+  factorTone,
+  pnlTone,
   type RailTone,
 } from '../components/ui';
 
@@ -146,6 +150,12 @@ export default function DashboardPage() {
   const startingBalance = scopeAccounts.reduce((sum, a) => sum + a.initial_balance, 0);
 
   const stats = computeStats(scopeTrades, tz);
+  // Tendance des chiffres clés, dans l'ordre du journal : elle dessine le fond des cellules
+  const chrono = sortByTradeTime(scopeTrades);
+  const sparks = statSparks(
+    chrono.map((trade) => trade.net_pnl),
+    chrono.map((trade) => rMultiple(trade)),
+  );
   const openCount = scopeTrades.filter(isOpen).length;
   const floating = openCount > 0 ? floatingPnl(scopeTrades) : 0;
   const recent = sortByTradeTime(scopeTrades).slice(-6).reverse();
@@ -292,6 +302,8 @@ export default function DashboardPage() {
             size="lg"
             tone={stats.count === 0 ? 'muted' : stats.netPnl > 0 ? 'gain' : stats.netPnl < 0 ? 'loss' : 'neutral'}
             value={<CountUp value={stats.netPnl} format={(v) => formatMoney(v, currency, true)} className="block" />}
+            spark={sparks.pnl}
+            sparkTone={pnlTone(stats.netPnl)}
             sub={
               <>
                 Brut {formatMoney(stats.grossPnl, currency, true)} · frais {formatMoney(stats.fees, currency)}
@@ -309,12 +321,16 @@ export default function DashboardPage() {
             label="Taux de réussite"
             value={formatPercent(stats.winRate, 0)}
             sub={`${stats.wins} gagnant(s) · ${stats.losses} perdant(s)`}
+            spark={sparks.winRate}
+            sparkTone="accent"
           />
           <Figure
             className="bg-surface"
             label="Profit factor"
             value={formatProfitFactor(stats.profitFactor)}
             sub="Gains bruts ÷ pertes brutes"
+            spark={sparks.profitFactor}
+            sparkTone={factorTone(stats.profitFactor)}
           />
           <Figure
             className="bg-surface"
