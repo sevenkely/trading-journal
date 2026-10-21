@@ -6,10 +6,13 @@
  * titres en serif. Toutes les valeurs passent par ces tokens.
  */
 @theme {
-  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Instrument Serif", "Instrument Sans Variable", ui-serif, Georgia, serif;
-  /* Chiffres : monospace du système (aucune dépendance). Un poste de marché compte en colonnes alignées. */
-  --font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  /* Texte : Plex Sans, dessinée pour les interfaces denses et l'instrumentation (grande hauteur d'x,
+     chiffres stables). Le serif d'affichage reste Instrument Serif : c'est lui qui signe les titres. */
+  --font-sans: "IBM Plex Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  /* Chiffres : Plex Mono, de la même main que le texte. La monospace du système différait d'un
+     poste à l'autre (SF Mono, Consolas, Roboto Mono) là où l'alignement en colonnes est le seul critère. */
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 
   --color-ink: #06080c;
   --color-panel: #080b11;
@@ -127,7 +130,8 @@ h3 {
   .figure {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.01em;
+    /* Plex Mono a déjà son propre rythme : inutile de le serrer comme la monospace du système. */
+    letter-spacing: 0;
   }
 
   .eyebrow {
@@ -135,7 +139,8 @@ h3 {
     font-weight: 500;
     line-height: 1.2;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
+    /* Plex Sans est plus large en capitales que l'ancien sans : 0.12em suffit à détacher le libellé. */
+    letter-spacing: 0.12em;
     color: var(--color-muted);
   }
 }
