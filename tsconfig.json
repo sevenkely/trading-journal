@@ -10,6 +10,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
+    // vite.config.ts importe la règle de déploiement avec son extension (le chargeur natif de Vite l'exige)
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "resolveJsonModule": true,

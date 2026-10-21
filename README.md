@@ -64,6 +64,13 @@ La clé `anon` est publique par conception : la sécurité repose sur la RLS. Ne
 3. Dans *Project Settings → Environment Variables*, ajoute `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` (environnements Production et Preview).
 4. Lance le déploiement, puis reporte l’URL obtenue dans *Site URL* et *Redirect URLs* côté Supabase.
 
+> **Le build refuse de partir sans clés.** `VITE_SUPABASE_*` est gravé dans le bundle au moment du build :
+> sans ces variables, l’application se déploierait en mode démo et les trades d’un visiteur resteraient
+> dans son navigateur. Sur Vercel (`VERCEL=1`), `vite.config.ts` interrompt donc le build en nommant les
+> variables manquantes — voir `src/lib/buildEnv.ts`. En local et en intégration continue, le mode démo
+> reste autorisé. Pour publier volontairement une démonstration : `VITE_ALLOW_DEMO=1`.
+> Ajouter une variable ne reconstruit pas un déploiement existant : il faut le relancer.
+
 ## Import des trades
 
 | Source | Fichier à fournir | Points à vérifier |
@@ -109,7 +116,7 @@ Avant chaque import, l’aperçu affiche les trades à importer, les doublons ig
 | `npm run build` | Vérification TypeScript puis build de production |
 | `npm run preview` | Prévisualisation du build |
 | `npm run typecheck` | Vérification TypeScript seule |
-| `npm test` | Tests unitaires (calculs, règles, flottant, comportements, prévision, risque de ruine, alertes, sauvegarde, fuseaux, CSV, MT5, palette, futures, dossier de trade, setups), test de fumée et audit d’accessibilité (axe-core) |
+| `npm test` | Tests unitaires (calculs, règles, flottant, comportements, prévision, risque de ruine, alertes, sauvegarde, fuseaux, CSV, MT5, palette, futures, dossier de trade, setups, garde-fou de déploiement), test de fumée et audit d’accessibilité (axe-core) |
 
 L’intégration continue (`.github/workflows/ci.yml`) lance le build et les tests sur chaque envoi et chaque pull request.
 
