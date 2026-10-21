@@ -8,7 +8,7 @@ import { WeekStrip } from '../components/charts/WeekStrip';
 import { DailyPnlChart } from '../components/charts/DailyPnlChart';
 import { EquityPanel } from '../components/charts/EquityPanel';
 import { dailyBars, type DayBar } from '../lib/chartData';
-import { computeStats, dailyMap, floatingPnl, isOpen, sortByTradeTime, tradeTime } from '../lib/metrics';
+import { computeStats, dailyMap, floatingPnl, isOpen, sortByTradeTime, splitTrades, tradeTime } from '../lib/metrics';
 import { monthDays, shiftMonthKey } from '../lib/patterns';
 import { statSparks } from '../lib/spark';
 import { rMultiple } from '../lib/tradeQuery';
@@ -150,8 +150,9 @@ export default function DashboardPage() {
   const startingBalance = scopeAccounts.reduce((sum, a) => sum + a.initial_balance, 0);
 
   const stats = computeStats(scopeTrades, tz);
-  // Tendance des chiffres clés, dans l'ordre du journal : elle dessine le fond des cellules
-  const chrono = sortByTradeTime(scopeTrades);
+  // Tendance des chiffres clés, dans l'ordre du journal : elle dessine le fond des cellules.
+  // Une position ouverte n'a pas de résultat — le chiffre est réalisé, la courbe aussi.
+  const chrono = sortByTradeTime(splitTrades(scopeTrades).realized);
   const sparks = statSparks(
     chrono.map((trade) => trade.net_pnl),
     chrono.map((trade) => rMultiple(trade)),

@@ -10,7 +10,7 @@ import { shortDate } from '../lib/chartData';
 import { DEFAULT_CURRENCY, DEFAULT_TIMEZONE } from '../lib/constants';
 import { forecastTarget, type Forecast } from '../lib/forecast';
 import { capFirst, dayKey, formatDate, formatDateTime, formatMoney, formatNumber, formatPercent, formatProfitFactor, formatSignedCompact } from '../lib/format';
-import { computeStats, sortByTradeTime, tradeTime, type Stats } from '../lib/metrics';
+import { computeStats, sortByTradeTime, splitTrades, tradeTime, type Stats } from '../lib/metrics';
 import { statSparks } from '../lib/spark';
 import { rMultiple } from '../lib/tradeQuery';
 import { lastMonths, mondayOf, monthBounds, monthDays, monthWeeks, shiftDays, shiftMonthKey, weekKeys } from '../lib/patterns';
@@ -325,9 +325,12 @@ export default function ReportPage() {
   const overtradingIds = new Set(overtrading.map((t) => t.id));
 
   const stats = computeStats(periodTrades);
+  // Le chiffre affiché est réalisé : le tracé de fond doit l'être aussi, sinon une position
+  // ouverte ferait monter la courbe sous un P&L net qui ne la compte pas.
+  const realizedPeriod = splitTrades(periodTrades).realized;
   const sparks = statSparks(
-    periodTrades.map((trade) => trade.net_pnl),
-    periodTrades.map((trade) => rMultiple(trade)),
+    realizedPeriod.map((trade) => trade.net_pnl),
+    realizedPeriod.map((trade) => rMultiple(trade)),
   );
 
   // Un point par jour : sert au graphique, au meilleur / pire jour et au nombre de jours tradés.

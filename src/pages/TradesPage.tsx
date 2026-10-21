@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ArrowUpDown, Bookmark, Check, ChevronLeft, ChevronRight, Download, Pencil, Plus, Search, SlidersHorizontal, Trash2, X, Zap } from 'lucide-react';
 import { useAccounts, useTrades } from '../data/hooks';
-import { computeStats, floatingPnl, isOpen } from '../lib/metrics';
+import { computeStats, floatingPnl, isOpen, splitTrades } from '../lib/metrics';
 import { statSparks } from '../lib/spark';
 import { formatDateTime, formatNumber, formatPercent, formatProfitFactor, formatR } from '../lib/format';
 import { tradesToCsv } from '../lib/csv';
@@ -197,9 +197,11 @@ export default function TradesPage() {
   const pageRows = sorted.slice(start, end);
   const stats = computeStats(sorted, BROWSER_TZ);
   // Tendance de chaque chiffre, sur la sélection courante : elle alimente le fond des cellules.
+  // Les positions ouvertes restent hors du tracé, comme hors des statistiques réalisées.
+  const realizedRows = splitTrades(sorted).realized;
   const sparks = statSparks(
-    sorted.map((trade) => trade.net_pnl),
-    sorted.map((trade) => rMultiple(trade)),
+    realizedRows.map((trade) => trade.net_pnl),
+    realizedRows.map((trade) => rMultiple(trade)),
   );
   // Pied de tableau : ce qui est affiché, positions ouvertes comprises (leur P&L est flottant).
   const openRows = sorted.filter(isOpen).length;
